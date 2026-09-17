@@ -70,7 +70,7 @@ class Services:
                 table_workflows=self.settings.aws_ddb_workflows,
                 table_documents=self.settings.aws_ddb_documents,
                 table_audit=self.settings.aws_ddb_audit,
-                region=self.settings.bedrock_region,
+                region=self.settings.aws_region,
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("DynamoRepository unavailable (%s); falling back to InMemoryRepository", exc)
@@ -81,8 +81,8 @@ class Services:
             return MockObjectStore(), MockDocumentProcessor()
         try:
             return (
-                S3ObjectStore(self.settings.aws_s3_bucket, self.settings.bedrock_region),
-                TextractProcessor(self.settings.bedrock_region),
+                S3ObjectStore(self.settings.aws_s3_bucket, self.settings.aws_region),
+                TextractProcessor(self.settings.aws_region),
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("AWS document services unavailable (%s); falling back to mocks", exc)

@@ -115,16 +115,16 @@ class DynamoRepository(WorkflowRepository):
 
 
 def _dumps(obj: dict[str, Any]) -> dict[str, Any]:
-    """Recursively convert Python values to DynamoDB attribute values (JSON-native)."""
+    """Convert a Python dictionary into DynamoDB AttributeValue format."""
     import json
 
-    return {"M": _convert(json.loads(json.dumps(obj, default=str)))}
+    normalized = json.loads(json.dumps(obj, default=str))
+    return {str(key): _convert(value) for key, value in normalized.items()}
 
 
 def _loads(item: dict[str, Any]) -> dict[str, Any]:
-    import json
-
-    return json.loads(json.dumps(_unconvert(item)))
+    """Convert a DynamoDB item back into ordinary Python values."""
+    return {key: _unconvert(value) for key, value in item.items()}
 
 
 def _convert(value: Any) -> dict[str, Any]:

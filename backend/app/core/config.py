@@ -22,6 +22,10 @@ class Settings:
         except json.JSONDecodeError:
             self.cors_origins = ["http://localhost:5173"]
 
+        self.aws_region: str = env.get(
+            "AWS_REGION",
+            env.get("AWS_DEFAULT_REGION", "us-east-1"),
+        )
         self.bedrock_region: str = env.get("BEDROCK_REGION", "us-east-1")
         self.bedrock_model_id: str = env.get(
             "BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20240620-v1:0"
