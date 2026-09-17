@@ -56,9 +56,28 @@ Scope: Documents + AWS Infrastructure
 
 ### C8 - CI/CD
 
-* [x] `samconfig.toml`
-* [ ] Deployment workflow
-* [ ] Staging deployment
+* [x] `samconfig.example.toml` committed (`samconfig.toml` stays gitignored)
+* [x] Existing `.github/workflows/ci.yml` preserved unchanged
+* [x] Added `.github/workflows/cd.yml` staging deployment workflow
+* [x] CD triggers on push/merge to `main` only (plus manual `workflow_dispatch`);
+      pull requests are excluded and remain covered by CI
+* [x] CD uses Python 3.12, installs the AWS SAM CLI, then runs
+      `sam validate --lint`, `sam build`, `sam deploy`
+* [x] Deploys stack `flowforge-staging` in `ap-south-1`
+* [x] Deploy parameters passed explicitly on the CLI, because
+      `infrastructure/samconfig.toml` is gitignored and absent on the runner
+* [x] No AWS access keys or secrets in the repository; authentication uses
+      GitHub OIDC (`id-token: write`) assuming `secrets.AWS_DEPLOY_ROLE_ARN`
+* [x] `concurrency: cd-staging` prevents overlapping deployments of the same stack
+* [ ] Staging deployment executed (deliberately NOT run from a local machine)
+
+#### CD prerequisites (one-time, to be configured in GitHub/AWS before first run)
+
+* [ ] Create GitHub environment `staging` (optional reviewer approval gate)
+* [ ] Create an IAM role trusting the GitHub OIDC provider
+      (`token.actions.githubusercontent.com`) scoped to this repository's `main` ref
+* [ ] Store that role's ARN as the secret `AWS_DEPLOY_ROLE_ARN`
+      (repository or `staging` environment secret) - the ARN only, never keys
 
 ## Remaining Document Tasks
 
@@ -68,10 +87,17 @@ Scope: Documents + AWS Infrastructure
 ## Validation
 
 * [x] Backend tests passed: 43 tests
+* [x] Ruff lint passed
 * [x] Local Lambda handler returned HTTP 200
-* [x] SAM template validation passed
+* [x] SAM template validation passed (`sam validate --lint`)
 * [x] SAM build completed successfully
+* [x] `ci.yml` and `cd.yml` parse as valid YAML with the expected jobs/triggers
+* [ ] Deployed staging stack verified in AWS - pending, no deployment has been run
 
 ## Current Focus
 
-Final code review and first Person C commit before controlled staging deployment.
+CI/CD preparation is complete and committed-ready. The staging deployment pipeline
+is defined but has never been executed: no deployment has been made from a local
+machine, and no AWS credentials were used. The first `flowforge-staging` deploy will
+happen only when the OIDC role and `AWS_DEPLOY_ROLE_ARN` secret are in place and a
+merge to `main` occurs (or the workflow is manually dispatched).
