@@ -30,7 +30,7 @@ Status legend: `[x] done`, `[/] in progress`, `[ ] pending`, `[~] blocked/stuck`
 - [x] No automatic-only cycles (Tarjan SCC detection); every cycle is human-gated
 - [x] `ValidationReport` + `validate_or_raise`; generation retries once then fails loudly
 
-**DoD:** all validator tests green. ⚠ dependent on test run (§ A9).
+**DoD:** all validator tests green. ✅ (`tests/test_schema_validator.py`).
 
 ## A3 · Deterministic state machine (`app/workflow/state_machine.py`)
 - [x] `advance_workflow(workflow, handlers, context, inputs)` — deterministic, no LLM calls
@@ -42,7 +42,7 @@ Status legend: `[x] done`, `[/] in progress`, `[ ] pending`, `[~] blocked/stuck`
 - [x] Metadata/message/needs per advance for the frontend (`AdvanceResult`)
 
 **DoD:** "cannot skip state", "cannot execute before approval", "invalid transition rejected",
-"terminal works", "recovery works" — covered by tests. ⚠ test run pending.
+"terminal works", "recovery works" — covered by tests. ✅ (`tests/test_state_machine.py`).
 
 ## A4 · Transition condition registry (`app/workflow/conditions.py`)
 - [x] Closed set: always, eligibility_{passed,failed}, documents_{ready,missing},
@@ -82,8 +82,11 @@ Status legend: `[x] done`, `[/] in progress`, `[ ] pending`, `[~] blocked/stuck`
 - [x] `POST /workflows`, `GET /workflows/{id}`, `POST /workflows/{id}/advance`,
       `POST /workflows/{id}/documents`, `GET /workflows/{id}/audit`
 - [x] Pydantic request/response models (contract-first — frontend can build on these)
-- [ ] **Run `pytest` — make whole suite green**
-- [ ] Write `docs/api-reference.md` from the live OpenAPI schema
+- [x] **Run `pytest` — whole suite green** (`53 passed`, `ruff` clean)
+- [x] Write `docs/api-reference.md` from the live OpenAPI schema
+      (`backend/scripts/generate_api_reference.py` → `docs/api-reference.md` + `docs/openapi.json`)
+- [x] Production hardening pass: normalized `needs` on reads, typed not-found errors,
+      non-leaking 500s, bounded uploads, thread-safe repository/IDs, structured logging
 
 ## A10 · Persistence (DynamoDB) + security
 - [x] `WorkflowRepository` interface; `InMemoryRepository` (demo) + `DynamoRepository` (prod)
@@ -93,11 +96,11 @@ Status legend: `[x] done`, `[/] in progress`, `[ ] pending`, `[~] blocked/stuck`
 - [ ] AWS IAM/network hardening notes → fold into C7/C8 infra
 
 ## A11 · Documentation (owner: A)
-- [ ] `docs/architecture.md` (from ARCHITECTURE.md)
-- [ ] `docs/ai-architecture.md`
-- [ ] `docs/workflow-engine.md`
-- [ ] `docs/api-reference.md`
-- [ ] `docs/evaluation.md` (metrics + how to measure — final numbers only from `evaluation/`)
+- [x] `docs/architecture.md` (from ARCHITECTURE.md)
+- [x] `docs/ai-architecture.md`
+- [x] `docs/workflow-engine.md`
+- [x] `docs/api-reference.md` (generated from the live OpenAPI schema)
+- [x] `docs/evaluation.md` (metrics + how to measure — final numbers only from `evaluation/`)
 
 ---
 

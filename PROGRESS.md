@@ -157,6 +157,30 @@ Legend: ✅ done · ⏳ done pending verification · 🚧 in progress · ⬜ not
 - Measured (mock): 100% workflow validity, 100% classification, 100% field extraction,
   100% conflict detection; all targets pass
 
+## Chunk 13b — Backend production hardening + Person A docs
+**Owner:** A · **Status:** ✅ done (`53 passed`, `ruff` clean, evaluation `--strict` green)
+
+- Fixed real bug: `WorkflowService.to_detail` returned `state.type.value`
+  (`document_required`/`human_approval`) instead of the normalized gate label used by
+  `advance`; now both share `state_machine.needs_label` (`document_upload`/`approval`/…)
+- `WorkflowService.advance` raises `WorkflowNotFound` instead of `KeyError`; routes map it
+- Thread-safe confirmation ids (`threading.Lock` + `itertools.count`); removed the global
+  mutable list counter
+- Uploads are streamed in bounded 1 MB chunks and rejected at the limit (no full-body read)
+- `_http` no longer leaks internal error strings on 500; unexpected errors are logged and
+  return a generic message
+- Added response models (`AdvanceWorkflowResponse`, `AuditListResponse`) + field descriptions
+- `InMemoryRepository` is now thread-safe and value-isolated (copy on read/write), matching
+  the DynamoDB serialization boundary
+- Added `AuditEvent.event_id` (unique per event), structured logging
+  (`app/core/logging_config.py`, `LOG_LEVEL`), and warning logs on mock fallbacks
+- Hoisted inline imports out of route/deps functions; safe enum coercion for untrusted
+  model output in `BedrockProvider`; typed `schema_validator` helpers
+- New tests `backend/tests/test_production_hardening.py` (10) → suite now **53 passed**
+- Person A docs: `docs/architecture.md`, `docs/ai-architecture.md`,
+  `docs/workflow-engine.md`, generated `docs/api-reference.md` + `docs/openapi.json`
+  via `backend/scripts/generate_api_reference.py`
+
 ## Chunk 14 — Infrastructure (SAM/Lambda/IAM) + CI/CD
 **Owner:** C · **Status:** 🚧 in progress — CI ✅, SAM/Lambda/IAM ⬜
 
@@ -180,7 +204,7 @@ Legend: ✅ done · ⏳ done pending verification · 🚧 in progress · ⬜ not
 | 6 | Workflow JSON schema | ✅ |
 | 7 | API contracts | ✅ `models/api.py` + routes |
 | 8 | Pydantic models | ✅ |
-| 9 | Deterministic state machine + tests | ✅ 39 tests pass |
+| 9 | Deterministic state machine + tests | ✅ 53 tests pass (Chunk 13b) |
 | 10 | Mock workflow | ✅ `knowledge/scholarship_process.json` |
 | 11 | Mock API response | ✅ mock provider + in-memory repo + `services/mock.ts` |
 | 12 | Frontend graph against mock | ✅ (Chunks 10–12, build + lint green) |
