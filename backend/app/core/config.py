@@ -12,6 +12,7 @@ class Settings:
         env = env or os.environ
         self.app_name: str = env.get("APP_NAME", "FlowForge")
         self.environment: str = env.get("ENVIRONMENT", "development")
+        self.log_level: str = env.get("LOG_LEVEL", "INFO")
         self.demo_mode: bool = env.get("DEMO_MODE", "true").lower() in {"1", "true", "yes"}
         self.demo_user_id: str = env.get("DEMO_USER_ID", "demo-user")
 

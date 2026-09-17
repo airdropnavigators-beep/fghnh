@@ -1,7 +1,14 @@
-"""In-memory repository used for DEMO_MODE/local development and tests."""
+"""In-memory repository used for DEMO_MODE/local development and tests.
+
+Thread-safe and value-isolated: reads return deep copies and writes store deep
+copies. This matches the serialization boundary of a real database
+(DynamoRepository), so callers can never mutate persisted state by reference and
+concurrent requests cannot corrupt shared dicts.
+"""
 
 from __future__ import annotations
 
+import threading
 from collections import defaultdict
 from typing import DefaultDict
 
@@ -13,27 +20,37 @@ from .repository import WorkflowRepository
 
 class InMemoryRepository(WorkflowRepository):
     def __init__(self) -> None:
+        self._lock = threading.RLock()
         self._workflows: dict[str, Workflow] = {}
         self._documents: DefaultDict[str, dict[str, DocumentRecord]] = defaultdict(dict)
         self._audit: DefaultDict[str, list[AuditEvent]] = defaultdict(list)
 
     def save_workflow(self, workflow: Workflow) -> None:
-        self._workflows[workflow.workflow_id] = workflow
+        with self._lock:
+            self._workflows[workflow.workflow_id] = workflow.model_copy(deep=True)
 
     def get_workflow(self, workflow_id: str) -> Workflow | None:
-        return self._workflows.get(workflow_id)
+        with self._lock:
+            stored = self._workflows.get(workflow_id)
+            return stored.model_copy(deep=True) if stored is not None else None
 
     def save_document(self, doc: DocumentRecord) -> None:
-        self._documents[doc.workflow_id][doc.document_id] = doc
+        with self._lock:
+            self._documents[doc.workflow_id][doc.document_id] = doc.model_copy(deep=True)
 
     def get_document(self, workflow_id: str, document_id: str) -> DocumentRecord | None:
-        return self._documents[workflow_id].get(document_id)
+        with self._lock:
+            stored = self._documents[workflow_id].get(document_id)
+            return stored.model_copy(deep=True) if stored is not None else None
 
     def list_documents(self, workflow_id: str) -> list[DocumentRecord]:
-        return list(self._documents[workflow_id].values())
+        with self._lock:
+            return [d.model_copy(deep=True) for d in self._documents[workflow_id].values()]
 
     def append_audit(self, event: AuditEvent) -> None:
-        self._audit[event.workflow_id].append(event)
+        with self._lock:
+            self._audit[event.workflow_id].append(event.model_copy(deep=True))
 
     def list_audit(self, workflow_id: str) -> list[AuditEvent]:
-        return list(self._audit[workflow_id])
+        with self._lock:
+            return [e.model_copy(deep=True) for e in self._audit[workflow_id]]

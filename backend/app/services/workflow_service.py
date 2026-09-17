@@ -7,7 +7,11 @@ handlers — execution itself never asks the LLM anything.
 
 from __future__ import annotations
 
+import logging
+import threading
 import uuid
+from datetime import datetime, timezone
+from itertools import count
 from typing import Any, Optional
 
 from ..ai.llm_provider import LLMProvider
@@ -27,13 +31,17 @@ from ..models.workflow import State, Workflow
 from ..services.demo_scenario import DEMO_PROFILE
 from ..services.eligibility import check_eligibility
 from ..storage.repository import WorkflowRepository
+from ..workflow.errors import WorkflowNotFound
 from ..workflow.state_machine import (
     AdvanceResult,
     ExecutionContext,
     StepHandlerMap,
     StepResult,
     advance_workflow,
+    needs_label,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class WorkflowService:
@@ -115,7 +123,7 @@ class WorkflowService:
             goal=workflow.goal,
             current_state=active.id if active else workflow.current_state,
             last_message=_message(active, workflow, docs, has_warning),
-            needs=active.type.value if active else None,
+            needs=needs_label(active) if active else None,
             progress=WorkflowProgress(completed=completed, total=total, ratio=completed / total),
             states=[s.model_dump() for s in workflow.states],
             collected_documents=sorted(docs),
@@ -127,7 +135,7 @@ class WorkflowService:
     def advance(self, workflow_id: str, inputs: Optional[AdvanceWorkflowRequest] = None) -> AdvanceResult:
         workflow = self._repo.get_workflow(workflow_id)
         if workflow is None:
-            raise KeyError(workflow_id)
+            raise WorkflowNotFound(f"workflow '{workflow_id}' not found")
         ctx = self._build_context(workflow)
         handlers = self._build_handlers(workflow)
         result = advance_workflow(workflow, handlers, ctx, inputs)
@@ -222,17 +230,17 @@ def _submission_handler() -> Any:
     return execute
 
 
-_counter = [2026000]
+_confirmation_counter = count(2026001)
+_confirmation_lock = threading.Lock()
 
 
 def _next_confirmation_id() -> str:
-    _counter[0] += 1
-    return f"FF-{_counter[0]}"
+    """Monotonic, thread-safe confirmation id (e.g. ``FF-2026002``)."""
+    with _confirmation_lock:
+        return f"FF-{next(_confirmation_counter)}"
 
 
 def _now() -> str:
-    from datetime import datetime, timezone
-
     return datetime.now(timezone.utc).isoformat()
 
 

@@ -26,6 +26,8 @@ class ExtractedField(BaseModel):
 
 
 class ClassificationResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     classification: str
     confidence: float = Field(ge=0.0, le=1.0)
     reasoning: str = ""

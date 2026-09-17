@@ -70,7 +70,8 @@ class BedrockProvider(LLMProvider):
                     body=body.encode("utf-8"),
                 )
                 payload = json.loads(resp["body"].read().decode("utf-8"))
-                text = payload.get("content", [{}])[0].get("text", "")
+                content = payload.get("content") or []
+                text = content[0].get("text", "") if content else ""
                 return _extract_json(text)
             except ClientError as exc:
                 last_error = exc
@@ -161,11 +162,13 @@ class BedrockProvider(LLMProvider):
         )
         raw = self._invoke_anthropic(system, prompt)
         return CrossValidationResult(
-            status=ValidationStatus(raw.get("status", "needs_review")),
+            status=_coerce_enum(ValidationStatus, raw.get("status"), ValidationStatus.NEEDS_REVIEW),
             confidence=clamped(float(raw.get("confidence", 0.0))),
             issues=[
                 ValidationIssue(
-                    severity=ValidationSeverity(i.get("severity", "warning")),
+                    severity=_coerce_enum(
+                        ValidationSeverity, i.get("severity"), ValidationSeverity.WARNING
+                    ),
                     field=str(i.get("field", "")),
                     message=str(i.get("message", "")),
                     evidence=list(i.get("evidence", [])),
@@ -176,6 +179,19 @@ class BedrockProvider(LLMProvider):
             suggestions=[str(s) for s in raw.get("suggestions", [])],
             checked_documents=sorted(extracted_fields),
         )
+
+
+def _coerce_enum(enum_cls: type, value: Any, default: Any) -> Any:
+    """Best-effort coercion of an untrusted model value to a domain enum.
+
+    Model output is data, not a contract: an unexpected label must degrade to a
+    safe default rather than crash the request.
+    """
+    try:
+        return enum_cls(value)
+    except (ValueError, TypeError):
+        logger.warning("unexpected %s value %r; defaulting to %s", enum_cls.__name__, value, default)
+        return default
 
 
 def _read_prompt(path: Path) -> str:

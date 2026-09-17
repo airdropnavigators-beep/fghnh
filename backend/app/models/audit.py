@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -17,6 +18,7 @@ def utc_now_iso() -> str:
 class AuditEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    event_id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     timestamp: str = Field(default_factory=utc_now_iso)
     workflow_id: str
     event_type: AuditEventType

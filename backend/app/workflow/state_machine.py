@@ -121,7 +121,7 @@ def advance_workflow(
 
         step = _run_state(workflow, current, handlers, context, result)
         if step.status != "completed":
-            result.needs = _needs_label(current) if _is_waiting(step.status) else step.status
+            result.needs = needs_label(current) if _is_waiting(step.status) else step.status
             result.message = step.message
             result.active_state_id = current.id
             if step.status == "blocked":
@@ -180,7 +180,7 @@ def advance_workflow(
 
         if current.type not in {StateType.AUTOMATIC, StateType.VALIDATION, StateType.EXECUTION}:
             # gated state: pause and wait for the human
-            result.needs = _needs_label(current)
+            result.needs = needs_label(current)
             result.message = current.description
             result.active_state_id = current.id
             workflow.current_state = current.id
@@ -360,7 +360,13 @@ def _set(workflow: Workflow, state: State, status: StateStatus) -> None:
     workflow.touch()
 
 
-def _needs_label(state: State) -> str:
+def needs_label(state: State) -> str:
+    """Normalized label describing what a gated state is waiting for.
+
+    This is the single source of truth for the `needs` value returned to clients,
+    shared by `advance_workflow` and `WorkflowService.to_detail` so a GET and a
+    POST always report the same gate.
+    """
     return {
         StateType.USER_INPUT: "user_input",
         StateType.DOCUMENT_REQUIRED: "document_upload",

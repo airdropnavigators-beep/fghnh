@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Deque, Set, Tuple
 
 from ..models.enums import StateType
-from ..models.workflow import Workflow
+from ..models.workflow import State, Workflow
 from .conditions import is_known_condition, known_conditions
 from .errors import WorkflowValidationError
 
@@ -122,8 +122,7 @@ def _walk_checks(workflow: Workflow, errors: list[str]) -> None:
             )
 
 
-def _reachable(states: dict[str, object], start: str) -> set[str]:
-    # states: id -> State
+def _reachable(states: dict[str, State], start: str) -> set[str]:
     seen: set[str] = set()
     stack = [start]
     while stack:
@@ -141,7 +140,7 @@ def _reachable(states: dict[str, object], start: str) -> set[str]:
 
 
 def _execution_without_approval(
-    states: dict[str, object], initial: str, reachable: set[str]
+    states: dict[str, State], initial: str, reachable: set[str]
 ) -> bool:
     """True if any path from `initial` reaches an execution state without having
     passed a human_approval state. Tracks (node, approved_yet) pairs."""
@@ -170,7 +169,7 @@ def _execution_without_approval(
 
 
 def _elementary_cycles(
-    states: dict[str, object], initial: str, reachable: set[str]
+    states: dict[str, State], initial: str, reachable: set[str]
 ) -> list[set[str]]:
     """Detect cycles in the reachable subgraph (cycle = set of nodes forming a loop)."""
     if initial not in states:
