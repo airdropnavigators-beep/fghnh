@@ -50,10 +50,9 @@ Scope: Documents + AWS Infrastructure
 ## In Progress
 
 ### C7 - Observability
-
-* [x] CloudWatch Lambda log group defined
-* [ ] Structured application-event logging
-* [ ] CloudWatch metric filters for workflow completion/errors
+- [x] CloudWatch Lambda log group defined
+- [x] Structured application-event logging
+- [x] CloudWatch metric filters for workflow completion/errors
 
 ### C8 - CI/CD
 

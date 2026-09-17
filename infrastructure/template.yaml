@@ -296,6 +296,37 @@ Resources:
       LogGroupName: !Sub "/aws/lambda/${FlowForgeApiFunction}"
       RetentionInDays: 7
 
+
+  WorkflowCompletedMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref FlowForgeApiLogGroup
+      FilterPattern: '"workflow_completed"'
+      MetricTransformations:
+        - MetricNamespace: FlowForge
+          MetricName: WorkflowCompleted
+          MetricValue: "1"
+
+  WorkflowExecutionMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref FlowForgeApiLogGroup
+      FilterPattern: '"workflow_execution_event"'
+      MetricTransformations:
+        - MetricNamespace: FlowForge
+          MetricName: WorkflowExecutionEvents
+          MetricValue: "1"
+
+  ErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref FlowForgeApiLogGroup
+      FilterPattern: '"error"'
+      MetricTransformations:
+        - MetricNamespace: FlowForge
+          MetricName: ApplicationErrors
+          MetricValue: "1"
+
 Outputs:
 
   ApiUrl:
