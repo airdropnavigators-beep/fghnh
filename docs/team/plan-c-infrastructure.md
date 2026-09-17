@@ -26,18 +26,18 @@ Status legend: `[x] done`, `[/] in progress`, `[ ] pending`, `[~] blocked/stuck`
 - [ ] Live Textract smoke test with a real PDF (needs creds)
 
 ## C3 · Test documents (`evaluation/test_documents`, spec §33)
-- [ ] Generate fictional docs: `transcript_valid`, `transcript_gpa_conflict`,
+- [x] Generate fictional docs: `transcript_valid`, `transcript_gpa_conflict`,
       `transcript_missing_name`, `government_id_valid`, `government_id_name_mismatch`,
       `income_certificate_expired` (PDFs, no real personal data)
-- [ ] Keep them parseable by both the mock processor and Textract (real text, not scans)
+- [x] Keep them parseable by both the mock processor and Textract (real text, not scans)
 
 ## C4 · Evaluation dataset + metrics (`evaluation/`, spec §32, §43)
-- [ ] `evaluation/ground_truth/` — known answers per document (classification + fields + conflicts)
-- [ ] `evaluation/run_evaluation.py` — measures:
+- [x] `evaluation/ground_truth/` — known answers per document (classification + fields + conflicts)
+- [x] `evaluation/run_evaluation.py` — measures:
       workflow-gen validity (>95% target), classification (>90%), field extraction (>85%),
       conflict detection (>80%), generation latency (<5s), doc-processing latency (<10s)
-- [ ] `evaluation/results/` — only measured numbers, never fabricated
-- [ ] `docs/evaluation.md` — how to run + how results map to claims
+- [x] `evaluation/results/` — only measured numbers, never fabricated
+- [x] `docs/evaluation.md` — how to run + how results map to claims
 
 ## C5 · SAM / CloudFormation (`infrastructure/`, spec §7/§9)
 - [ ] `template.yaml`: API Gateway + Lambda (FastAPI→Lambda adapter) + Bedrock permissions
@@ -57,10 +57,10 @@ Status legend: `[x] done`, `[/] in progress`, `[ ] pending`, `[~] blocked/stuck`
 - [ ] Metric filter: workflow-completed, execution events, errors
 
 ## C8 · CI/CD
-- [ ] GitHub Actions: backend tests (`pytest` + `ruff`) on PR → develop
-- [ ] Frontend build/lint job on PR → develop
+- [x] GitHub Actions: backend tests (`pytest` + `ruff`) on PR → develop
+- [x] Frontend build/lint job on PR → develop
 - [ ] Deploy job: `sam build && sam deploy` on merge to main (staging/env tags)
-- [ ] `.github/workflows/ci.yml` + `cd.yml`
+- [~] `.github/workflows/ci.yml` ✅ + `cd.yml` pending (blocked on SAM template)
 
 ---
 

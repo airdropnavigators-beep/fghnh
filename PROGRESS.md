@@ -141,10 +141,27 @@ Legend: ✅ done · ⏳ done pending verification · 🚧 in progress · ⬜ not
 - `components/AuditLog/` — filterable audit trail drawer
 
 ## Chunk 13 — Evaluation + test documents
-**Owner:** C · **Status:** ⬜ — `evaluation/` + `docs/evaluation.md`
+**Owner:** C · **Status:** ✅ done (mock path measured; Bedrock run pending creds)
+
+- `evaluation/generate_test_documents.py` — stdlib PDF writer; 9 fictional, selectable-text
+  documents (valid / GPA-conflict / missing-name transcript, valid / name-mismatch ID,
+  valid / expired income cert, enrollment verification, personal essay)
+- `evaluation/ground_truth/documents.json` — known classification, fields and validation
+  scenarios per document
+- `evaluation/run_evaluation.py` — 6 metrics (workflow-gen validity, classification,
+  field extraction, conflict detection, generation latency, doc-processing latency),
+  `--strict` gate, `--provider bedrock`, JSON results to `evaluation/results/`
+- `docs/evaluation.md` — methodology, reproduction, claims/non-claims
+- Fixed a real bug found by the harness: `"id" in filename` matched `valid`
+  (`income_certificate_valid`); now token-based (`_identity_hint`) + regression tests
+- Measured (mock): 100% workflow validity, 100% classification, 100% field extraction,
+  100% conflict detection; all targets pass
 
 ## Chunk 14 — Infrastructure (SAM/Lambda/IAM) + CI/CD
-**Owner:** C · **Status:** ⬜ — `infrastructure/` + GitHub Actions
+**Owner:** C · **Status:** 🚧 in progress — CI ✅, SAM/Lambda/IAM ⬜
+
+- `.github/workflows/ci.yml` — backend (ruff + pytest), frontend (lint + build),
+  evaluation (generate docs + `--strict`)
 
 ## Chunk 15 — Live AWS + Bedrock verification & demo polish
 **Owner:** A/C · **Status:** ⬜ — only after demo is fully safe in DEMO_MODE
@@ -168,8 +185,12 @@ Legend: ✅ done · ⏳ done pending verification · 🚧 in progress · ⬜ not
 | 11 | Mock API response | ✅ mock provider + in-memory repo + `services/mock.ts` |
 | 12 | Frontend graph against mock | ✅ (Chunks 10–12, build + lint green) |
 | 13 | Verify complete mock path | ✅ E2E scripted + live demo verified |
+| 14 | Evaluation + test documents | ✅ measured (mock path, all targets pass) |
+| 15 | CI/CD | ✅ `.github/workflows/ci.yml` |
+| 16 | Infrastructure (SAM/Lambda/IAM) | ⬜ Chunk 14 |
 
 ## Known gaps / risks
 - Live Bedrock/Textract calls unverified (no AWS creds in this workspace yet).
 - Frontend built against the mock; interactive browser pass + wiring to live backend pending.
-- Evaluation numbers must come only from `evaluation/run_evaluation.py`.
+- Infrastructure (SAM/Lambda/IAM/CloudWatch) not yet written — Chunk 14 remainder.
+- Evaluation numbers describe the deterministic DEMO_MODE path, not a foundation model.

@@ -101,6 +101,34 @@ def test_transcript_extraction_corrected(provider):
     assert fields["current_semester_gpa"].value == "3.70"
 
 
+def test_transcript_missing_name_variant(provider):
+    fields = provider.extract_fields(transcript_text("missing_name"), "academic_transcript")
+    assert "student_name" not in fields
+    assert fields["cumulative_gpa"].value == "3.80"
+
+
+def test_government_id_name_mismatch_variant(provider):
+    text = MockDocumentProcessor().extract_text(b"", "government_id_name_mismatch.pdf", "application/pdf")
+    fields = provider.extract_fields(text, "government_id")
+    assert fields["full_name"].value == "Jordan Blake"
+
+
+def test_income_certificate_expired_variant(provider):
+    text = MockDocumentProcessor().extract_text(b"", "income_certificate_expired.pdf", "application/pdf")
+    fields = provider.extract_fields(text, "proof_of_income")
+    assert fields["valid_until"].value == "2025-01-31"
+    assert fields["annual_income"].value == "24000"
+
+
+def test_enrollment_verification_classification_and_extraction(provider):
+    text = MockDocumentProcessor().extract_text(b"", "enrollment_verification.pdf", "application/pdf")
+    res = provider.classify_document(text)
+    assert res.classification == "enrollment_verification"
+    fields = provider.extract_fields(text, "enrollment_verification")
+    assert fields["enrollment_status"].value == "Full-time"
+    assert fields["expected_graduation"].value == "2027"
+
+
 def test_cross_validation_detects_gpa_conflict(provider, reqs):
     fields = provider.extract_fields(transcript_text("conflict"), "academic_transcript")
     result = provider.run_cross_validation(reqs, {"academic_transcript": fields})

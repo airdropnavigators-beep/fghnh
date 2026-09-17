@@ -1,0 +1,103 @@
+{
+  "process": "Merit Excellence Scholarship",
+  "applicant_name": "Alex Rivera",
+  "documents": [
+    {
+      "file": "transcript_valid.pdf",
+      "expected_classification": "academic_transcript",
+      "expected_fields": {
+        "student_name": "Alex Rivera",
+        "cumulative_gpa": "3.72",
+        "current_semester_gpa": "3.70",
+        "enrollment_status": "Full-time",
+        "expected_graduation": "2027"
+      }
+    },
+    {
+      "file": "transcript_gpa_conflict.pdf",
+      "expected_classification": "academic_transcript",
+      "expected_fields": {
+        "student_name": "Alex Rivera",
+        "cumulative_gpa": "3.72",
+        "current_semester_gpa": "3.20",
+        "enrollment_status": "Full-time",
+        "expected_graduation": "2027"
+      }
+    },
+    {
+      "file": "transcript_missing_name.pdf",
+      "expected_classification": "academic_transcript",
+      "expected_fields": {
+        "cumulative_gpa": "3.80",
+        "current_semester_gpa": "3.75",
+        "enrollment_status": "Full-time",
+        "expected_graduation": "2027"
+      },
+      "expected_missing_fields": ["student_name"]
+    },
+    {
+      "file": "government_id_valid.pdf",
+      "expected_classification": "government_id",
+      "expected_fields": {
+        "full_name": "Alex Rivera",
+        "date_of_birth": "1999-04-12",
+        "id_number": "FF-ID-8841-DEMO"
+      }
+    },
+    {
+      "file": "government_id_name_mismatch.pdf",
+      "expected_classification": "government_id",
+      "expected_fields": {
+        "full_name": "Jordan Blake"
+      }
+    },
+    {
+      "file": "income_certificate_valid.pdf",
+      "expected_classification": "proof_of_income",
+      "expected_fields": {
+        "annual_income": "24000",
+        "valid_until": "2027-06-30"
+      }
+    },
+    {
+      "file": "income_certificate_expired.pdf",
+      "expected_classification": "proof_of_income",
+      "expected_fields": {
+        "annual_income": "24000",
+        "valid_until": "2025-01-31"
+      }
+    },
+    {
+      "file": "enrollment_verification.pdf",
+      "expected_classification": "enrollment_verification",
+      "expected_fields": {
+        "enrollment_status": "Full-time",
+        "expected_graduation": "2027"
+      }
+    },
+    {
+      "file": "personal_essay.pdf",
+      "expected_classification": "personal_essay",
+      "expected_fields": {
+        "submitted": true
+      }
+    }
+  ],
+  "validation_scenarios": [
+    {
+      "name": "clean_pass",
+      "documents": ["transcript_valid.pdf"],
+      "expected_status": "pass"
+    },
+    {
+      "name": "gpa_conflict_warns",
+      "documents": ["transcript_gpa_conflict.pdf"],
+      "expected_status": "needs_review"
+    },
+    {
+      "name": "id_name_mismatch_warns",
+      "documents": ["transcript_valid.pdf", "government_id_name_mismatch.pdf"],
+      "expected_status": "needs_review"
+    }
+  ]
+}
