@@ -32,3 +32,8 @@ evaluation/results/*
 samconfig.toml
 *.pem
 *.p12
+# Hoplite sandbox (private attachments / scratch)
+.hoplite/attachments/
+.hoplite/tmp/
+.hoplite/artifacts/
+.hoplite/runtime/
