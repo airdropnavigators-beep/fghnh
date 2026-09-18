@@ -114,6 +114,7 @@ export interface AdvanceResponse extends WorkflowDetail {
 }
 
 export interface AuditEvent {
+  event_id?: string;
   timestamp: string;
   workflow_id: string;
   event_type: AuditEventType;
@@ -160,10 +161,20 @@ export const DOC_LABELS: Record<string, string> = {
   government_id: "Government ID",
   proof_of_income: "Proof of income",
   personal_essay: "Personal essay",
+  enrollment_verification: "Enrollment verification",
 };
 
 export const NEEDS_LABELS: Record<string, string> = {
   document_upload: "Documents needed",
   user_input: "Input needed",
   approval: "Approval needed",
+  action: "Action needed",
+};
+
+export const STATUS_LABELS: Record<WorkflowStatus, string> = {
+  in_progress: "In progress",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  failed: "Failed",
+  generation_failed: "Planning failed",
 };

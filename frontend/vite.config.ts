@@ -19,6 +19,18 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ["react", "react-dom"],
+          flow: ["@xyflow/react"],
+          motion: ["framer-motion"],
+          ui: ["@radix-ui/react-dialog", "@radix-ui/react-tooltip", "sonner", "lucide-react"],
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     allowedHosts,

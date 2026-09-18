@@ -1,9 +1,15 @@
 /**
  * API client for FlowForge.
  *
- * Builds against the offline mock by default (`services/mock.ts`). Set
- * `VITE_USE_MOCK=false` (and optionally `VITE_API_BASE`) to talk to the real
- * FastAPI backend via the Vite dev proxy (`/api` -> :8000).
+ * Two interchangeable implementations behind `FlowForgeApi`:
+ *  - `MockApi`  — deterministic offline demo (`services/mock.ts`), the default.
+ *  - `HttpApi`  — the real FastAPI backend. Enable with `VITE_USE_MOCK=false`;
+ *    `VITE_API_BASE` defaults to `/api`, which the Vite dev server proxies to
+ *    `127.0.0.1:8000` (see `vite.config.ts`). In production point it at the
+ *    deployed API Gateway URL.
+ *
+ * The mode can also be flipped at runtime (`?api=live` / `?api=mock` or
+ * `localStorage.flowforge.api`) so a single build can drive both demos.
  */
 
 import type {
@@ -14,96 +20,158 @@ import type {
   DocumentUploadResult,
   WorkflowDetail,
 } from "../types";
+import { ApiError } from "./errors";
+import { fetchJson } from "./http";
 import { mockApi } from "./mock";
 
+export type ApiMode = "mock" | "live";
+
+export interface HealthInfo {
+  app: string;
+  environment: string;
+  demo_mode: boolean;
+  user?: string;
+}
+
 export interface FlowForgeApi {
+  readonly mode: ApiMode;
   createWorkflow(goal: string): Promise<CreateWorkflowResult>;
   getWorkflow(workflowId: string): Promise<WorkflowDetail>;
   advance(workflowId: string, req: AdvanceRequest): Promise<AdvanceResponse>;
   uploadDocument(workflowId: string, file: File): Promise<DocumentUploadResult>;
   listAudit(workflowId: string): Promise<AuditResponse>;
+  /** Reachability probe; resolves with server info or throws an `ApiError`. */
+  health(): Promise<HealthInfo>;
 }
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
 export const API_BASE = (import.meta.env.VITE_API_BASE ?? "/api").replace(/\/$/, "");
 
-class HttpApi implements FlowForgeApi {
-  private async request<T>(path: string, init?: RequestInit): Promise<T> {
-    let res: Response;
-    try {
-      res = await fetch(`${API_BASE}${path}`, init);
-    } catch {
-      throw new Error("Cannot reach the FlowForge backend.");
-    }
-    if (!res.ok) {
-      let detail = res.statusText;
+const MODE_STORAGE_KEY = "flowforge.api";
+
+/** Resolve the API mode: URL param > localStorage > build-time env > mock. */
+export function resolveApiMode(): ApiMode {
+  if (typeof window !== "undefined") {
+    const fromUrl = new URLSearchParams(window.location.search).get("api");
+    if (fromUrl === "live" || fromUrl === "mock") {
       try {
-        const body = (await res.json()) as { detail?: unknown };
-        if (typeof body.detail === "string") detail = body.detail;
+        window.localStorage.setItem(MODE_STORAGE_KEY, fromUrl);
       } catch {
-        // fall back to status text
+        // storage unavailable (private mode) — URL param still wins for this load
       }
-      throw new Error(detail);
+      return fromUrl;
     }
-    return (await res.json()) as T;
+    try {
+      const stored = window.localStorage.getItem(MODE_STORAGE_KEY);
+      if (stored === "live" || stored === "mock") return stored;
+    } catch {
+      // ignore
+    }
+  }
+  return import.meta.env.VITE_USE_MOCK === "false" ? "live" : "mock";
+}
+
+export function persistApiMode(mode: ApiMode): void {
+  try {
+    window.localStorage.setItem(MODE_STORAGE_KEY, mode);
+  } catch {
+    // ignore
+  }
+}
+
+const JSON_HEADERS = { "Content-Type": "application/json", Accept: "application/json" };
+
+export class HttpApi implements FlowForgeApi {
+  readonly mode = "live" as const;
+
+  constructor(private readonly base: string = API_BASE) {}
+
+  private url(path: string): string {
+    return `${this.base}${path}`;
+  }
+
+  health(): Promise<HealthInfo> {
+    return fetchJson<HealthInfo>(this.url("/health"), { timeoutMs: 4_000, headers: { Accept: "application/json" } });
   }
 
   createWorkflow(goal: string): Promise<CreateWorkflowResult> {
-    return this.request("/workflows", {
+    // Workflow planning may call a foundation model — allow a generous deadline.
+    // Not retried: a retry could plan (and bill) twice.
+    return fetchJson(this.url("/workflows"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
       body: JSON.stringify({ goal }),
+      timeoutMs: 60_000,
     });
   }
 
   getWorkflow(workflowId: string): Promise<WorkflowDetail> {
-    return this.request(`/workflows/${workflowId}`);
+    return fetchJson(this.url(`/workflows/${encodeURIComponent(workflowId)}`), {
+      headers: { Accept: "application/json" },
+      retries: 2,
+    });
   }
 
   advance(workflowId: string, req: AdvanceRequest): Promise<AdvanceResponse> {
-    return this.request(`/workflows/${workflowId}/advance`, {
+    // Advancing is a state mutation — never auto-retry; the executor is the
+    // source of truth and the UI re-syncs with GET on failure.
+    return fetchJson(this.url(`/workflows/${encodeURIComponent(workflowId)}/advance`), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
       body: JSON.stringify(req),
+      timeoutMs: 30_000,
     });
   }
 
   uploadDocument(workflowId: string, file: File): Promise<DocumentUploadResult> {
     const form = new FormData();
-    form.append("file", file);
-    return this.request(`/workflows/${workflowId}/documents`, {
+    form.append("file", file, file.name);
+    // Textract/Bedrock extraction can take a while on real documents.
+    return fetchJson(this.url(`/workflows/${encodeURIComponent(workflowId)}/documents`), {
       method: "POST",
       body: form,
+      headers: { Accept: "application/json" },
+      timeoutMs: 90_000,
     });
   }
 
   listAudit(workflowId: string): Promise<AuditResponse> {
-    return this.request(`/workflows/${workflowId}/audit`);
+    return fetchJson(this.url(`/workflows/${encodeURIComponent(workflowId)}/audit`), {
+      headers: { Accept: "application/json" },
+      retries: 2,
+    });
   }
 }
 
-class MockApi implements FlowForgeApi {
+export class MockApi implements FlowForgeApi {
+  readonly mode = "mock" as const;
+
+  async health(): Promise<HealthInfo> {
+    return { app: "FlowForge (offline mock)", environment: "browser", demo_mode: true, user: "demo-user" };
+  }
+
   async createWorkflow(goal: string): Promise<CreateWorkflowResult> {
     return mockApi.createWorkflow(goal);
   }
 
-  async getWorkflow(): Promise<WorkflowDetail> {
-    return mockApi.getWorkflow();
+  async getWorkflow(workflowId: string): Promise<WorkflowDetail> {
+    return mockApi.getWorkflow(workflowId);
   }
 
-  async advance(_workflowId: string, req: AdvanceRequest): Promise<AdvanceResponse> {
-    return mockApi.advance(req);
+  async advance(workflowId: string, req: AdvanceRequest): Promise<AdvanceResponse> {
+    return mockApi.advance(workflowId, req);
   }
 
-  async uploadDocument(_workflowId: string, file: File): Promise<DocumentUploadResult> {
-    return mockApi.uploadDocument(_workflowId, file);
+  async uploadDocument(workflowId: string, file: File): Promise<DocumentUploadResult> {
+    return mockApi.uploadDocument(workflowId, file);
   }
 
-  async listAudit(_workflowId: string): Promise<AuditResponse> {
-    return mockApi.listAudit();
+  async listAudit(workflowId: string): Promise<AuditResponse> {
+    return mockApi.listAudit(workflowId);
   }
 }
 
-export function createApi(): FlowForgeApi {
-  return USE_MOCK ? new MockApi() : new HttpApi();
+export function createApi(mode: ApiMode = resolveApiMode()): FlowForgeApi {
+  return mode === "live" ? new HttpApi() : new MockApi();
 }
+
+export { ApiError };
