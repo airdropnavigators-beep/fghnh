@@ -21,11 +21,11 @@ Parameters:
 
   BedrockModelId:
     Type: String
-    Default: anthropic.claude-3-5-sonnet-20240620-v1:0
+    Default: amazon.nova-2-lite-v1:0
 
   BedrockFastModelId:
     Type: String
-    Default: anthropic.claude-3-5-haiku-20241022-v1:0
+    Default: amazon.nova-2-lite-v1:0
 
   CorsOrigins:
     Type: String
