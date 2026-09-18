@@ -68,7 +68,7 @@ class BedrockProvider(LLMProvider):
 
         for attempt in range(self._settings.bedrock_max_retries):
             try:
-                if model.startswith("amazon.nova"):
+                if "amazon.nova" in model:
                     text = self._invoke_nova(
                         system=system,
                         prompt=prompt,

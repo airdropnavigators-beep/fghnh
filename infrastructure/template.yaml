@@ -21,11 +21,11 @@ Parameters:
 
   BedrockModelId:
     Type: String
-    Default: amazon.nova-2-lite-v1:0
+    Default: global.amazon.nova-2-lite-v1:0
 
   BedrockFastModelId:
     Type: String
-    Default: amazon.nova-2-lite-v1:0
+    Default: global.amazon.nova-2-lite-v1:0
 
   CorsOrigins:
     Type: String
@@ -247,6 +247,7 @@ Resources:
                 - textract:DetectDocumentText
               Resource: "*"
 
+
         # ----------------------------------------------------
         # BEDROCK
         # ----------------------------------------------------
@@ -257,15 +258,9 @@ Resources:
               Action:
                 - bedrock:InvokeModel
               Resource:
-                - !Sub
-                  - "arn:${AWS::Partition}:bedrock:${Region}::foundation-model/${Model}"
-                  - Region: !Ref BedrockRegion
-                    Model: !Ref BedrockModelId
-
-                - !Sub
-                  - "arn:${AWS::Partition}:bedrock:${Region}::foundation-model/${Model}"
-                  - Region: !Ref BedrockRegion
-                    Model: !Ref BedrockFastModelId
+                - !Sub "arn:${AWS::Partition}:bedrock:${BedrockRegion}:${AWS::AccountId}:inference-profile/${BedrockModelId}"
+                - !Sub "arn:${AWS::Partition}:bedrock:${BedrockRegion}:${AWS::AccountId}:inference-profile/${BedrockFastModelId}"
+                - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0"
 
       Events:
 
