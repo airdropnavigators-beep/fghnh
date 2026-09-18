@@ -1,0 +1,18 @@
+version = 0.1
+
+[default.validate.parameters]
+lint = true
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+stack_name = "flowforge-staging"
+resolve_s3 = true
+s3_prefix = "flowforge-staging"
+region = "ap-south-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+disable_rollback = false
+parameter_overrides = "Environment=\"staging\" BedrockRegion=\"us-east-1\" DocumentRetentionDays=\"1\""

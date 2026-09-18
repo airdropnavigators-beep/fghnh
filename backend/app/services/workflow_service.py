@@ -17,6 +17,7 @@ from typing import Any, Optional
 from ..ai.llm_provider import LLMProvider
 from ..ai.workflow_generator import WorkflowGenerator
 from ..core.config import Settings
+from ..core.observability import log_event
 from ..models.api import AdvanceWorkflowRequest, WorkflowDetailResponse, WorkflowProgress
 from ..models.audit import AuditEvent
 from ..models.document import DocumentRecord, ExtractedField
@@ -144,7 +145,24 @@ class WorkflowService:
             workflow.collected_data["validation_result"] = validation_result
         for event in result.events:
             self._repo.append_audit(event)
+
+            log_event(
+                "workflow_execution_event",
+                workflow_id=workflow_id,
+                event_type=getattr(event.event_type, "value", str(event.event_type)),
+                from_state=event.from_state,
+                to_state=event.to_state,
+            )
+
         self._repo.save_workflow(workflow)
+
+        if workflow.status == WorkflowStatus.COMPLETED:
+            log_event(
+                "workflow_completed",
+                workflow_id=workflow_id,
+                current_state=workflow.current_state,
+            )
+
         return result
 
     # ------------------------------------------------------------- internals

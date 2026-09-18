@@ -102,32 +102,52 @@ class DynamoRepository(WorkflowRepository):
             KeyConditionExpression="workflowId = :wid",
             ExpressionAttributeValues={":wid": {"S": workflow_id}},
         )
+
         events: list[AuditEvent] = []
+
         for item in resp.get("Items", []):
             data = _loads(item)
+
             for key in ("workflowId", "timestamp"):
                 data.pop(key, None)
-            # timestamp doubles as SK; restore from item if needed
-            data["timestamp"] = item.get("timestamp", {}).get("S", "")
-            events.append(AuditEvent.model_validate(data))
+
+            # Backward compatibility for older rows.
+            if data.get("confidence") == "None":
+                data["confidence"] = None
+
+            for key in ("from_state", "to_state"):
+                if data.get(key) == "None":
+                    data[key] = None
+
+            data["timestamp"] = item.get(
+                "timestamp",
+                {},
+            ).get("S", "")
+
+            events.append(
+                AuditEvent.model_validate(data)
+            )
+
         events.sort(key=lambda e: e.timestamp)
         return events
 
 
 def _dumps(obj: dict[str, Any]) -> dict[str, Any]:
-    """Recursively convert Python values to DynamoDB attribute values (JSON-native)."""
+    """Convert a Python dictionary into DynamoDB AttributeValue format."""
     import json
 
-    return {"M": _convert(json.loads(json.dumps(obj, default=str)))}
+    normalized = json.loads(json.dumps(obj, default=str))
+    return {str(key): _convert(value) for key, value in normalized.items()}
 
 
 def _loads(item: dict[str, Any]) -> dict[str, Any]:
-    import json
-
-    return json.loads(json.dumps(_unconvert(item)))
+    """Convert a DynamoDB item back into ordinary Python values."""
+    return {key: _unconvert(value) for key, value in item.items()}
 
 
 def _convert(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {"NULL": True}
     if isinstance(value, bool):
         return {"BOOL": value}
     if isinstance(value, int) or isinstance(value, float):
@@ -145,6 +165,8 @@ def _convert(value: Any) -> dict[str, Any]:
 
 
 def _unconvert(attr: dict[str, Any]) -> Any:
+    if "NULL" in attr:
+        return None
     if "S" in attr:
         return attr["S"]
     if "N" in attr:

@@ -1,0 +1,352 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  FlowForge serverless infrastructure:
+  FastAPI Lambda, HTTP API, S3 document storage,
+  DynamoDB persistence, Textract, Bedrock and CloudWatch.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: staging
+    AllowedValues:
+      - development
+      - staging
+      - production
+
+  BedrockRegion:
+    Type: String
+    Default: us-east-1
+
+  BedrockModelId:
+    Type: String
+    Default: global.amazon.nova-2-lite-v1:0
+
+  BedrockFastModelId:
+    Type: String
+    Default: global.amazon.nova-2-lite-v1:0
+
+  CorsOrigins:
+    Type: String
+    Default: '["http://localhost:5173"]'
+
+  DocumentRetentionDays:
+    Type: Number
+    Default: 1
+    MinValue: 1
+
+Globals:
+  Function:
+    Runtime: python3.12
+    MemorySize: 1024
+    Timeout: 30
+    Tracing: Active
+
+Resources:
+
+  # ==========================================================
+  # API GATEWAY
+  # ==========================================================
+
+  FlowForgeHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Environment
+
+  # ==========================================================
+  # S3 DOCUMENT STORAGE
+  # ==========================================================
+
+  DocumentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteDemoUploads
+            Status: Enabled
+            Prefix: uploads/
+            ExpirationInDays: !Ref DocumentRetentionDays
+
+      Tags:
+        - Key: Project
+          Value: FlowForge
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ==========================================================
+  # DYNAMODB
+  # ==========================================================
+
+  WorkflowsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+
+      AttributeDefinitions:
+        - AttributeName: workflowId
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: workflowId
+          KeyType: HASH
+
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+
+      Tags:
+        - Key: Project
+          Value: FlowForge
+
+  DocumentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+
+      AttributeDefinitions:
+        - AttributeName: workflowId
+          AttributeType: S
+        - AttributeName: documentId
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: workflowId
+          KeyType: HASH
+        - AttributeName: documentId
+          KeyType: RANGE
+
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+
+      Tags:
+        - Key: Project
+          Value: FlowForge
+
+  AuditTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+
+      AttributeDefinitions:
+        - AttributeName: workflowId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: workflowId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+
+      Tags:
+        - Key: Project
+          Value: FlowForge
+
+  # ==========================================================
+  # FASTAPI LAMBDA
+  # ==========================================================
+
+  FlowForgeApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/
+      Handler: lambda_handler.lambda_handler
+
+      Environment:
+        Variables:
+          APP_NAME: FlowForge
+          ENVIRONMENT: !Ref Environment
+          DEMO_MODE: "false"
+          MOCK_LLM: "true"
+          API_GATEWAY_BASE_PATH: !Sub "/${Environment}"
+
+          CORS_ORIGINS: !Ref CorsOrigins
+
+          AWS_S3_BUCKET: !Ref DocumentBucket
+
+          AWS_DYNAMODB_TABLE_WORKFLOWS: !Ref WorkflowsTable
+          AWS_DYNAMODB_TABLE_DOCUMENTS: !Ref DocumentsTable
+          AWS_DYNAMODB_TABLE_AUDIT: !Ref AuditTable
+
+          BEDROCK_REGION: !Ref BedrockRegion
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          BEDROCK_FAST_MODEL_ID: !Ref BedrockFastModelId
+
+          MAX_DOCUMENT_SIZE_MB: "10"
+          ALLOWED_MIME_TYPES: '["application/pdf","image/png","image/jpeg"]'
+
+          CONFIDENCE_PASS: "0.85"
+          CONFIDENCE_WARN: "0.60"
+          WORKFLOW_RETRY_ON_INVALID: "true"
+
+      Policies:
+
+        # ----------------------------------------------------
+        # S3
+        # ----------------------------------------------------
+
+        - Statement:
+            - Sid: DocumentObjectAccess
+              Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:DeleteObject
+              Resource: !Sub "${DocumentBucket.Arn}/uploads/*"
+
+        # ----------------------------------------------------
+        # DynamoDB
+        # ----------------------------------------------------
+
+        - Statement:
+            - Sid: WorkflowTableAccess
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:Query
+              Resource: !GetAtt WorkflowsTable.Arn
+
+            - Sid: DocumentTableAccess
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:Query
+              Resource: !GetAtt DocumentsTable.Arn
+
+            - Sid: AuditTableAccess
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:Query
+              Resource: !GetAtt AuditTable.Arn
+
+        # ----------------------------------------------------
+        # TEXTRACT
+        # ----------------------------------------------------
+
+        - Statement:
+            - Sid: TextractDocumentText
+              Effect: Allow
+              Action:
+                - textract:DetectDocumentText
+              Resource: "*"
+
+
+        # ----------------------------------------------------
+        # BEDROCK
+        # ----------------------------------------------------
+
+        - Statement:
+            - Sid: BedrockModels
+              Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource:
+                - !Sub "arn:${AWS::Partition}:bedrock:${BedrockRegion}:${AWS::AccountId}:inference-profile/${BedrockModelId}"
+                - !Sub "arn:${AWS::Partition}:bedrock:${BedrockRegion}:${AWS::AccountId}:inference-profile/${BedrockFastModelId}"
+                - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0"
+
+      Events:
+
+        RootRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref FlowForgeHttpApi
+            Path: /
+            Method: ANY
+
+        ProxyRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref FlowForgeHttpApi
+            Path: /{proxy+}
+            Method: ANY
+
+      Tags:
+        Project: FlowForge
+        Environment: !Ref Environment
+
+  # ==========================================================
+  # CLOUDWATCH
+  # ==========================================================
+
+  FlowForgeApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${FlowForgeApiFunction}"
+      RetentionInDays: 7
+
+
+  WorkflowCompletedMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref FlowForgeApiLogGroup
+      FilterPattern: '"workflow_completed"'
+      MetricTransformations:
+        - MetricNamespace: FlowForge
+          MetricName: WorkflowCompleted
+          MetricValue: "1"
+
+  WorkflowExecutionMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref FlowForgeApiLogGroup
+      FilterPattern: '"workflow_execution_event"'
+      MetricTransformations:
+        - MetricNamespace: FlowForge
+          MetricName: WorkflowExecutionEvents
+          MetricValue: "1"
+
+  ErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref FlowForgeApiLogGroup
+      FilterPattern: '"error"'
+      MetricTransformations:
+        - MetricNamespace: FlowForge
+          MetricName: ApplicationErrors
+          MetricValue: "1"
+
+Outputs:
+
+  ApiUrl:
+    Description: FlowForge HTTP API endpoint
+    Value: !Sub >
+      https://${FlowForgeHttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${Environment}/
+
+  DocumentBucketName:
+    Description: Private S3 bucket for uploaded documents
+    Value: !Ref DocumentBucket
+
+  WorkflowsTableName:
+    Description: DynamoDB workflows table
+    Value: !Ref WorkflowsTable
+
+  DocumentsTableName:
+    Description: DynamoDB documents table
+    Value: !Ref DocumentsTable
+
+  AuditTableName:
+    Description: DynamoDB audit table
+    Value: !Ref AuditTable
+
+  LambdaFunctionName:
+    Description: FlowForge API Lambda
+    Value: !Ref FlowForgeApiFunction

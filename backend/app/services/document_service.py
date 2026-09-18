@@ -9,6 +9,7 @@ from __future__ import annotations
 import uuid
 
 from ..ai.llm_provider import LLMProvider
+from ..core.observability import log_event
 from ..documents.processor import DocumentObjectStore, DocumentProcessor
 from ..models.document import DocumentRecord
 from ..models.enums import DocumentStatus
@@ -63,10 +64,29 @@ class DocumentService:
             doc.status = DocumentStatus.EXTRACTED
             doc.processed_at = _now()
             self._repo.save_document(doc)
+
+            log_event(
+                "document_processed",
+                workflow_id=workflow_id,
+                document_id=document_id,
+                classification=doc.classification,
+                status=doc.status.value,
+            )
+
             return doc
         except Exception as exc:  # noqa: BLE001 - normalized to a stable error
             doc.status = DocumentStatus.FAILED
             self._repo.save_document(doc)
+
+            log_event(
+                "error",
+                component="document_service",
+                workflow_id=workflow_id,
+                document_id=document_id,
+                error_type=type(exc).__name__,
+                message=str(exc),
+            )
+
             raise DocumentProcessingException(str(exc)) from exc
 
 

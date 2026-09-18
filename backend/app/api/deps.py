@@ -53,13 +53,22 @@ class Services:
         )
 
     def _build_llm(self) -> LLMProvider:
-        if self.settings.demo_mode:
-            logger.info("DEMO_MODE enabled: using MockLLMProvider")
+        if self.settings.demo_mode or self.settings.mock_llm:
+            logger.info(
+                 "Mock LLM enabled: demo_mode=%s mock_llm=%s",
+                 self.settings.demo_mode,
+                 self.settings.mock_llm,
+            )
             return MockLLMProvider()
+
         try:
             return BedrockProvider(self.settings)
+
         except Exception as exc:  # noqa: BLE001 - fall back so the app still boots
-            logger.warning("BedrockProvider unavailable (%s); falling back to MockLLMProvider", exc)
+            logger.warning(
+                "BedrockProvider unavailable (%s); falling back to MockLLMProvider",
+                exc,
+            )
             return MockLLMProvider()
 
     def _build_repo(self) -> WorkflowRepository:
@@ -70,7 +79,7 @@ class Services:
                 table_workflows=self.settings.aws_ddb_workflows,
                 table_documents=self.settings.aws_ddb_documents,
                 table_audit=self.settings.aws_ddb_audit,
-                region=self.settings.bedrock_region,
+                region=self.settings.aws_region,
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("DynamoRepository unavailable (%s); falling back to InMemoryRepository", exc)
@@ -81,8 +90,8 @@ class Services:
             return MockObjectStore(), MockDocumentProcessor()
         try:
             return (
-                S3ObjectStore(self.settings.aws_s3_bucket, self.settings.bedrock_region),
-                TextractProcessor(self.settings.bedrock_region),
+                S3ObjectStore(self.settings.aws_s3_bucket, self.settings.aws_region),
+                TextractProcessor(self.settings.aws_region),
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("AWS document services unavailable (%s); falling back to mocks", exc)

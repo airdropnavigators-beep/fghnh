@@ -14,6 +14,7 @@ class Settings:
         self.environment: str = env.get("ENVIRONMENT", "development")
         self.log_level: str = env.get("LOG_LEVEL", "INFO")
         self.demo_mode: bool = env.get("DEMO_MODE", "true").lower() in {"1", "true", "yes"}
+        self.mock_llm: bool = env.get("MOCK_LLM", "false").lower() in {"1", "true", "yes"}
         self.demo_user_id: str = env.get("DEMO_USER_ID", "demo-user")
 
         raw_origins = env.get("CORS_ORIGINS", '["http://localhost:5173"]')
@@ -22,6 +23,10 @@ class Settings:
         except json.JSONDecodeError:
             self.cors_origins = ["http://localhost:5173"]
 
+        self.aws_region: str = env.get(
+            "AWS_REGION",
+            env.get("AWS_DEFAULT_REGION", "us-east-1"),
+        )
         self.bedrock_region: str = env.get("BEDROCK_REGION", "us-east-1")
         self.bedrock_model_id: str = env.get(
             "BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20240620-v1:0"
