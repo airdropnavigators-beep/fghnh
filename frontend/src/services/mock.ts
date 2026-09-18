@@ -623,8 +623,16 @@ function classify(filename: string): DocumentUploadResult {
   };
 }
 
+// Simulated latency so the UI's loading states are visible in the demo. Tests set it to 0.
+let latencyScale = 1;
+
+export function setMockLatency(scale: number) {
+  latencyScale = scale;
+}
+
 function delay(ms = 450) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  const wait = Math.round(ms * latencyScale);
+  return wait > 0 ? new Promise((resolve) => setTimeout(resolve, wait)) : Promise.resolve();
 }
 
 export function resetMock() {

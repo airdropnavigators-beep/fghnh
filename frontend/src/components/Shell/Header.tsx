@@ -45,7 +45,7 @@ export function Logo({ className }: { className?: string }) {
 
 function ModeSwitch({ mode, onChange }: { mode: ApiMode; onChange: (m: ApiMode) => void }) {
   return (
-    <div role="radiogroup" aria-label="API mode" className="inline-flex rounded-lg border border-line bg-canvas p-0.5 text-xs font-medium">
+    <div role="radiogroup" aria-label="API mode" className="inline-flex whitespace-nowrap rounded-lg border border-line bg-canvas p-0.5 text-xs font-medium">
       {(["mock", "live"] as ApiMode[]).map((m) => (
         <button
           key={m}
@@ -106,7 +106,7 @@ function ConnectionPill({
   return (
     <Tooltip label={serverInfo ? `${serverInfo.environment} · ${serverInfo.demo_mode ? "DEMO_MODE (mock providers)" : "AWS providers"}` : "connected"}>
       <span>
-        <Badge tone="ok" dot pulse>
+        <Badge tone="ok" dot pulse className="whitespace-nowrap">
           <Wifi size={11} className="mr-0.5" /> {serverInfo?.demo_mode ? "live · demo" : "live"}
         </Badge>
       </span>
@@ -127,23 +127,23 @@ export function Header({
 }: HeaderProps) {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-surface/80 px-4 backdrop-blur sm:px-5">
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 shrink items-center gap-3">
         <Logo />
-        <span className="hidden h-5 w-px bg-line sm:block" />
-        <nav aria-label="Breadcrumb" className="hidden items-center gap-1.5 text-[13px] text-ink-500 sm:flex">
+        <span className="hidden h-5 w-px bg-line lg:block" />
+        <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1.5 whitespace-nowrap text-[13px] text-ink-500 lg:flex">
           <span>Workflows</span>
           <span className="text-ink-300">/</span>
-          <span className="font-medium text-ink-900">Scholarship demo</span>
+          <span className="truncate font-medium text-ink-900">Scholarship demo</span>
         </nav>
       </div>
 
-      <div className="flex items-center gap-2">
-        <div className="hidden md:block">
+      <div className="flex shrink-0 items-center gap-2">
+        <div className="hidden lg:block">
           <ModeSwitch mode={mode} onChange={onModeChange} />
         </div>
         <ConnectionPill mode={mode} connection={connection} serverInfo={serverInfo} onRetry={onRetryConnection} />
         {status && (
-          <Badge tone={STATUS_TONE[status]} dot pulse={status === "in_progress"} className="hidden sm:inline-flex">
+          <Badge tone={STATUS_TONE[status]} dot pulse={status === "in_progress"} className="hidden whitespace-nowrap md:inline-flex">
             {busy && <Loader2 size={11} className="mr-0.5 animate-spin" />}
             {STATUS_LABELS[status]}
           </Badge>

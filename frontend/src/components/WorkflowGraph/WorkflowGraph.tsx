@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -106,7 +106,7 @@ function focusSet(detail: WorkflowDetail): string[] {
   return [...ids];
 }
 
-function CameraController({ detail, camera }: { detail: WorkflowDetail; camera: Camera }) {
+function CameraController({ detail, camera, size }: { detail: WorkflowDetail; camera: Camera; size: string }) {
   const { fitView } = useReactFlow();
   const active = detail.current_state;
   useEffect(() => {
@@ -125,14 +125,39 @@ function CameraController({ detail, camera }: { detail: WorkflowDetail; camera: 
       }
     }, 80);
     return () => window.clearTimeout(id);
-    // Re-frame when the run moves to a new state or the camera mode changes.
+    // Re-frame when the run moves, the camera mode changes, or the canvas is resized.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detail.workflow_id, active, detail.status, camera]);
+  }, [detail.workflow_id, active, detail.status, camera, size]);
   return null;
+}
+
+/** Debounced "w×h" of an element so effects can react to container resizes. */
+function useElementSize(ref: React.RefObject<HTMLElement | null>): string {
+  const [size, setSize] = useState("0x0");
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let timer = 0;
+    const ro = new ResizeObserver(([entry]) => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const { width, height } = entry.contentRect;
+        setSize(`${Math.round(width)}x${Math.round(height)}`);
+      }, 120);
+    });
+    ro.observe(el);
+    return () => {
+      window.clearTimeout(timer);
+      ro.disconnect();
+    };
+  }, [ref]);
+  return size;
 }
 
 export function WorkflowGraph({ detail, loading, horizontal = false, className }: WorkflowGraphProps) {
   const [camera, setCamera] = useState<Camera>("follow");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const size = useElementSize(containerRef);
   const { nodes, edges } = useMemo(
     () => (detail ? buildGraph(detail, horizontal) : { nodes: [], edges: [] }),
     [detail, horizontal],
@@ -153,7 +178,7 @@ export function WorkflowGraph({ detail, loading, horizontal = false, className }
   }
 
   return (
-    <div className={cn("relative h-full w-full", className)}>
+    <div ref={containerRef} className={cn("relative h-full w-full", className)}>
       <ReactFlowProvider>
         <ReactFlow
           nodes={nodes}
@@ -172,7 +197,7 @@ export function WorkflowGraph({ detail, loading, horizontal = false, className }
         >
           <Background variant={BackgroundVariant.Dots} gap={20} size={1.4} color="#d3d7df" />
           <Controls showInteractive={false} position="bottom-left" />
-          <CameraController detail={detail} camera={camera} />
+          <CameraController detail={detail} camera={camera} size={size} />
         </ReactFlow>
       </ReactFlowProvider>
 

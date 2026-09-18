@@ -23,6 +23,13 @@ import type {
 import { ApiError } from "./errors";
 import { fetchJson } from "./http";
 import { mockApi } from "./mock";
+import {
+  normalizeAdvance,
+  normalizeAudit,
+  normalizeCreate,
+  normalizeDetail,
+  normalizeUpload,
+} from "./normalize";
 
 export type ApiMode = "mock" | "live";
 
@@ -93,52 +100,57 @@ export class HttpApi implements FlowForgeApi {
     return fetchJson<HealthInfo>(this.url("/health"), { timeoutMs: 4_000, headers: { Accept: "application/json" } });
   }
 
-  createWorkflow(goal: string): Promise<CreateWorkflowResult> {
+  async createWorkflow(goal: string): Promise<CreateWorkflowResult> {
     // Workflow planning may call a foundation model — allow a generous deadline.
     // Not retried: a retry could plan (and bill) twice.
-    return fetchJson(this.url("/workflows"), {
+    const raw = await fetchJson<unknown>(this.url("/workflows"), {
       method: "POST",
       headers: JSON_HEADERS,
       body: JSON.stringify({ goal }),
       timeoutMs: 60_000,
     });
+    return normalizeCreate(raw);
   }
 
-  getWorkflow(workflowId: string): Promise<WorkflowDetail> {
-    return fetchJson(this.url(`/workflows/${encodeURIComponent(workflowId)}`), {
+  async getWorkflow(workflowId: string): Promise<WorkflowDetail> {
+    const raw = await fetchJson<unknown>(this.url(`/workflows/${encodeURIComponent(workflowId)}`), {
       headers: { Accept: "application/json" },
       retries: 2,
     });
+    return normalizeDetail(raw);
   }
 
-  advance(workflowId: string, req: AdvanceRequest): Promise<AdvanceResponse> {
+  async advance(workflowId: string, req: AdvanceRequest): Promise<AdvanceResponse> {
     // Advancing is a state mutation — never auto-retry; the executor is the
     // source of truth and the UI re-syncs with GET on failure.
-    return fetchJson(this.url(`/workflows/${encodeURIComponent(workflowId)}/advance`), {
+    const raw = await fetchJson<unknown>(this.url(`/workflows/${encodeURIComponent(workflowId)}/advance`), {
       method: "POST",
       headers: JSON_HEADERS,
       body: JSON.stringify(req),
       timeoutMs: 30_000,
     });
+    return normalizeAdvance(raw);
   }
 
-  uploadDocument(workflowId: string, file: File): Promise<DocumentUploadResult> {
+  async uploadDocument(workflowId: string, file: File): Promise<DocumentUploadResult> {
     const form = new FormData();
     form.append("file", file, file.name);
     // Textract/Bedrock extraction can take a while on real documents.
-    return fetchJson(this.url(`/workflows/${encodeURIComponent(workflowId)}/documents`), {
+    const raw = await fetchJson<unknown>(this.url(`/workflows/${encodeURIComponent(workflowId)}/documents`), {
       method: "POST",
       body: form,
       headers: { Accept: "application/json" },
       timeoutMs: 90_000,
     });
+    return normalizeUpload(raw);
   }
 
-  listAudit(workflowId: string): Promise<AuditResponse> {
-    return fetchJson(this.url(`/workflows/${encodeURIComponent(workflowId)}/audit`), {
+  async listAudit(workflowId: string): Promise<AuditResponse> {
+    const raw = await fetchJson<unknown>(this.url(`/workflows/${encodeURIComponent(workflowId)}/audit`), {
       headers: { Accept: "application/json" },
       retries: 2,
     });
+    return normalizeAudit(raw);
   }
 }
 

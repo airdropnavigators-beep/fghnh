@@ -190,6 +190,52 @@ Legend: ✅ done · ⏳ done pending verification · 🚧 in progress · ⬜ not
 ## Chunk 15 — Live AWS + Bedrock verification & demo polish
 **Owner:** A/C · **Status:** ⬜ — only after demo is fully safe in DEMO_MODE
 
+## Chunk 16 — Frontend audit, redesign, responsiveness + live backend wiring
+**Owner:** B · **Status:** ✅ done (`tsc --noEmit && vite build` clean, `eslint` clean, `vitest` 22 pass;
+browser pass against mock **and** live `DEMO_MODE` backend)
+
+- Interactive browser audit of every screen/flow → `docs/team/frontend-audit-2026-09.md`
+  (16 broken/dead-ended items, all fixed here). Notables: approval modal `onClose` no-op
+  (dead end), `phaseFor` falling back to the goal screen for `user_input`/`action` gates,
+  audit feed ordered newest-batch-first, mock `advance()` never persisting events to
+  `listAudit()`, mock consuming one payload for both approval gates, `[object Object]` on
+  FastAPI 422s, fake `FF-2026-demo` confirmation id, hard-coded `eligibility_check` /
+  `document_collection` ids, overlapping left-rail panels, `7 of 10 · 70%` on completion
+- Design system: light "control-room" shell (`canvas`/`surface`/`line` tokens, teal `brand`,
+  `ok`/`warn`/`err` scales), Inter Variable + Instrument Serif + JetBrains Mono self-hosted
+  (`@fontsource*`), `components/ui/` primitives — `Button` (cva), `Badge`, `Skeleton`,
+  `EmptyState`, Radix `Dialog`/`SheetContent`, `Tooltip`, `sonner` toasts; motion tokens,
+  `prefers-reduced-motion` honoured
+- `WorkflowGraph`: top-down longest-path layout with back-edge detection (`utils/layout.ts`;
+  loops such as reject → re-upload leave from the side), happy path centred, animated active
+  edge with condition label, follow-active / fit-all camera, refit on resize, planning
+  skeleton + empty state. `StateNode`: status chips, completed check, active pulse, stagger
+- `GoalInput` hero · segmented `ProgressBar` (100 % on any terminal) · `SideRail` run
+  tracker · `ChatPanel` activity feed with human-readable `describeEvent()` copy
+- `DocumentUpload`: numbered checklist, dropzone + pipeline stage ticker, 5 demo docs, size
+  guard, per-upload ok/warn/err feedback (incl. unclassified), sticky CTA ·
+  `DocumentDetails`: collapsible field tables with source text + confidence meters ·
+  `ValidationResults`: block/review/pass threshold meter, evidence quotes, checked docs ·
+  `ApprovalModal`: Radix dialog (Esc/backdrop/X, focus trap), re-openable "Open gate" ·
+  `AuditLog`: sheet with timeline, filters, refresh-from-server, JSON export ·
+  `Shell/`: `Header` (breadcrumb, connection pill, mock/live switch), `OfflineNotice`,
+  `ErrorBanner` (retry / re-sync), `OutcomeCard` (copyable confirmation id), `ErrorBoundary`
+- Responsive: `xl` 3-column · `md`–`xl` graph + tabbed right panel + run-status sheet ·
+  `<md` stacked graph (46 vh) over tabbed panel; verified at 1440 / 834 / 390 px
+- Live backend (`services/http.ts`, `api.ts`, `normalize.ts`, `errors.ts`): per-call
+  deadlines (create 60 s, upload 90 s, advance 30 s, reads 15 s), bounded retry + backoff for
+  idempotent GETs and 502/503/504 only, typed `ApiError` (`network`/`timeout`/`http`/`parse`),
+  FastAPI `detail` flattening, status copy for 404/409/413/415/422/5xx, response-shape guards
+  so a 2xx with a foreign body never crashes a component; `/health` probe with auto re-probe,
+  409 → re-sync, runtime mode switch (`?api=live|mock`, `localStorage`, header toggle) —
+  `VITE_USE_MOCK` / `VITE_API_BASE` still honoured (`frontend/.env.example`), mock path intact
+- `useWorkflow`: connection state, per-action `pending`, chronological de-duplicated audit
+  merge (server `event_id`), confirmation id from `execution`/`workflow_completed` details
+- Tests (`vitest`): `http` (retry/timeout/4xx/parse), `normalize`, mock parity (two gates,
+  corrected transcript, audit persistence, 404/409), `phaseFor`/`mergeEvents`/`confirmationFrom`
+- Sandbox: `.hoplite/settings.json` + `setup.sh` + `run.sh` run FastAPI (`DEMO_MODE`) on :8000
+  and Vite on :5173 for the managed preview; `vite.config.ts` gains `VITE_ALLOWED_HOSTS`
+
 ---
 
 ## Current checklist (spec §45 task list)
@@ -207,14 +253,16 @@ Legend: ✅ done · ⏳ done pending verification · 🚧 in progress · ⬜ not
 | 9 | Deterministic state machine + tests | ✅ 53 tests pass (Chunk 13b) |
 | 10 | Mock workflow | ✅ `knowledge/scholarship_process.json` |
 | 11 | Mock API response | ✅ mock provider + in-memory repo + `services/mock.ts` |
-| 12 | Frontend graph against mock | ✅ (Chunks 10–12, build + lint green) |
-| 13 | Verify complete mock path | ✅ E2E scripted + live demo verified |
+| 12 | Frontend graph against mock | ✅ (Chunks 10–12; redesigned + browser-verified in Chunk 16) |
+| 13 | Verify complete mock path | ✅ E2E scripted + live demo verified; UI ↔ live backend E2E (Chunk 16) |
 | 14 | Evaluation + test documents | ✅ measured (mock path, all targets pass) |
 | 15 | CI/CD | ✅ `.github/workflows/ci.yml` |
 | 16 | Infrastructure (SAM/Lambda/IAM) | ⬜ Chunk 14 |
 
 ## Known gaps / risks
 - Live Bedrock/Textract calls unverified (no AWS creds in this workspace yet).
-- Frontend built against the mock; interactive browser pass + wiring to live backend pending.
+- ~~Frontend built against the mock; interactive browser pass + wiring to live backend pending.~~
+  ✅ Chunk 16 — interactive browser pass done; frontend wired to the live backend
+  (verified end-to-end against `DEMO_MODE`; real-AWS providers still gated on Chunk 15 creds).
 - Infrastructure (SAM/Lambda/IAM/CloudWatch) not yet written — Chunk 14 remainder.
 - Evaluation numbers describe the deterministic DEMO_MODE path, not a foundation model.

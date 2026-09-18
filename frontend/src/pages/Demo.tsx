@@ -178,14 +178,12 @@ export function Demo() {
             <div className="relative mx-auto flex min-h-full max-w-5xl flex-col justify-center px-4 py-10 sm:px-6 sm:py-16">
               <ErrorBanner error={error} onDismiss={dismissError} className="mx-auto mb-6 w-full max-w-3xl" />
               <GoalInput busy={pending === "create"} disabled={mode === "live" && connection === "offline"} onStart={(g) => void start(g)} />
-              {!isDesktop && (
-                <div className="mt-6 md:hidden">
-                  <p className="text-center text-[11px] text-ink-400">Switch API mode:</p>
-                  <div className="mt-2 flex justify-center">
-                    <ModeSwitchInline mode={mode} onChange={handleModeChange} />
-                  </div>
+              <div className="mt-6 lg:hidden">
+                <p className="text-center text-[11px] text-ink-400">API mode</p>
+                <div className="mt-2 flex justify-center">
+                  <ModeSwitchInline mode={mode} onChange={handleModeChange} />
                 </div>
-              )}
+              </div>
             </div>
           </main>
         ) : (
@@ -223,7 +221,7 @@ export function Demo() {
             <aside
               className={cn(
                 "slim-scroll flex min-h-0 flex-col overflow-y-auto bg-canvas",
-                isTablet ? "w-[380px] shrink-0 border-l border-line xl:w-[400px]" : "flex-1",
+                isTablet ? "w-[340px] shrink-0 border-l border-line lg:w-[380px] xl:w-[400px]" : "flex-1",
               )}
             >
               {!isDesktop && (
