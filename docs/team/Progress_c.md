@@ -73,11 +73,11 @@ Scope: Documents + AWS Infrastructure
 
 #### CD prerequisites (one-time, to be configured in GitHub/AWS before first run)
 
-* [ ] Create GitHub environment `staging` (optional reviewer approval gate)
-* [ ] Create an IAM role trusting the GitHub OIDC provider
-      (`token.actions.githubusercontent.com`) scoped to this repository's `main` ref
-* [ ] Store that role's ARN as the secret `AWS_DEPLOY_ROLE_ARN`
-      (repository or `staging` environment secret) - the ARN only, never keys
+* [x] Create GitHub environment `staging`
+* [x] Create an IAM role trusting the GitHub OIDC provider
+      (`token.actions.githubusercontent.com`) scoped to this repository's `staging` environment
+* [x] Store that role's ARN as the environment secret `AWS_DEPLOY_ROLE_ARN`
+      (ARN only; no AWS access keys stored)
 
 ## Remaining Document Tasks
 
@@ -86,7 +86,7 @@ Scope: Documents + AWS Infrastructure
 
 ## Validation
 
-* [x] Backend tests passed: 43 tests
+* [x] Backend tests passed: 53 tests
 * [x] Ruff lint passed
 * [x] Local Lambda handler returned HTTP 200
 * [x] SAM template validation passed (`sam validate --lint`)
