@@ -172,6 +172,7 @@ Resources:
           APP_NAME: FlowForge
           ENVIRONMENT: !Ref Environment
           DEMO_MODE: "false"
+          API_GATEWAY_BASE_PATH: !Sub "/${Environment}"
 
           CORS_ORIGINS: !Ref CorsOrigins
 
