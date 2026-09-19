@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "ports": {
+    "preview": 5173,
+    "additional": { "api": 8000 }
+  },
+  "scripts": {
+    "setup": { "enabled": true, "command": "bash .hoplite/setup.sh" },
+    "run": { "enabled": true, "command": "bash .hoplite/run.sh" },
+    "check": {
+      "enabled": true,
+      "command": "cd frontend && npm run lint && npm run build"
+    }
+  }
+}

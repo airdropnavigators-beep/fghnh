@@ -62,6 +62,13 @@ Open `http://localhost:5173`, type a goal such as:
 
 > I want to apply for the Merit Excellence Scholarship.
 
+The UI starts in **offline demo** mode (a deterministic in-browser mock). To drive the
+real backend, start it as above and either flip the **Offline demo / Live API** switch
+in the header, open `http://localhost:5173/?api=live`, or set `VITE_USE_MOCK=false`
+(see `frontend/.env.example`). The dev server proxies `/api` to `127.0.0.1:8000`.
+
+Quality gates: `npm run lint`, `npm test`, `npm run build` (`tsc --noEmit && vite build`).
+
 ## Demo mode
 
 `DEMO_MODE=true` (the default local config) runs the entire path against:

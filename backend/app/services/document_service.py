@@ -52,7 +52,7 @@ class DocumentService:
             key = self._object_key_fn(workflow_id, filename)
             doc.s3_key = self._store.put(key, content, mime_type)
 
-            text = self._processor.extract_text(content, filename, mime_type)
+            text = self._processor.extract_text(content, filename, mime_type, storage_uri=doc.s3_key)
             classification = self._llm.classify_document(text)
             doc.classification = classification.classification
             doc.classification_confidence = classification.confidence

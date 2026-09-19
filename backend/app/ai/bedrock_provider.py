@@ -1,4 +1,4 @@
-﻿"""Amazon Bedrock-backed LLM provider.
+"""Amazon Bedrock-backed LLM provider.
 
 Controlled AI components only: workflow generation, document classification,
 field extraction, and cross-validation. Each call requests strict JSON output and

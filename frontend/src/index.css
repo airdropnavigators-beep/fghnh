@@ -1,3 +1,8 @@
+@import "@fontsource-variable/inter/index.css";
+@import "@fontsource-variable/jetbrains-mono/index.css";
+@import "@fontsource/instrument-serif/index.css";
+@import "@fontsource/instrument-serif/400-italic.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -9,58 +14,137 @@
     height: 100%;
   }
 
+  html {
+    color-scheme: light;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
-    @apply bg-ink-950 text-paper-50 antialiased;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    @apply bg-canvas text-ink-900 antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    @apply bg-brand-100 text-ink-900;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-500/60 ring-offset-1 ring-offset-canvas;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
 @layer components {
   .panel {
-    @apply rounded-2xl border border-ink-700/60 bg-ink-800/60 shadow-card backdrop-blur-sm;
+    @apply rounded-2xl border border-line bg-surface shadow-card;
   }
 
-  .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40;
-  }
-
-  .btn-primary {
-    @apply btn bg-accent text-white hover:bg-accent-soft hover:text-ink-900;
-  }
-
-  .btn-ghost {
-    @apply btn border border-ink-700 bg-ink-800 text-paper-100 hover:border-ink-700/80 hover:bg-ink-700;
+  .eyebrow {
+    @apply font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-500;
   }
 
   .chip {
-    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium;
+    @apply inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium leading-4;
+  }
+
+  .chip-neutral {
+    @apply border-line bg-canvas text-ink-700;
+  }
+  .chip-brand {
+    @apply border-brand-200 bg-brand-50 text-brand-700;
+  }
+  .chip-ok {
+    @apply border-ok-100 bg-ok-50 text-ok-600;
+  }
+  .chip-warn {
+    @apply border-warn-100 bg-warn-50 text-warn-600;
+  }
+  .chip-err {
+    @apply border-err-100 bg-err-50 text-err-600;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm text-ink-900 shadow-card outline-none transition placeholder:text-ink-400 hover:border-line-strong focus:border-brand-500 focus:shadow-focus;
+  }
+
+  .skeleton {
+    @apply rounded-md bg-[linear-gradient(90deg,#eef0f4_25%,#f7f8fa_50%,#eef0f4_75%)] bg-[length:200%_100%] animate-shimmer;
+  }
+
+  .slim-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #d3d7df transparent;
+  }
+  .slim-scroll::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .slim-scroll::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-line-strong;
+  }
+  .slim-scroll::-webkit-scrollbar-track {
+    background: transparent;
   }
 }
 
-/* React Flow overrides (dark canvas) */
+/* React Flow overrides (light canvas) */
 .react-flow__attribution {
-  @apply !bg-transparent !text-ink-700;
+  display: none;
 }
 
 .react-flow__controls {
-  @apply !rounded-xl !border !border-ink-700 !bg-ink-800 !shadow-card;
+  @apply !gap-0 !rounded-xl !border !border-line !bg-surface !p-0.5 !shadow-raised;
 }
 
 .react-flow__controls-button {
-  @apply !border-ink-700/50 !bg-ink-800 !fill-paper-100 !text-paper-100 hover:!bg-ink-700;
+  @apply !h-8 !w-8 !rounded-lg !border-0 !bg-transparent !fill-ink-700 !text-ink-700 hover:!bg-canvas;
+}
+.react-flow__controls-button svg {
+  max-width: 14px;
+  max-height: 14px;
 }
 
-.react-flow__edge {
-  @apply !stroke-paper-50/60;
+.react-flow__edge-path {
+  @apply stroke-line-strong;
+  stroke-width: 1.5;
+}
+.react-flow__edge.ff-edge-active .react-flow__edge-path {
+  @apply stroke-brand-500;
+  stroke-width: 2;
+  stroke-dasharray: 6 6;
+  animation: ff-dash 0.9s linear infinite;
+}
+.react-flow__edge.ff-edge-done .react-flow__edge-path {
+  @apply stroke-brand-200;
+  stroke-width: 2;
+}
+.react-flow__edge.ff-edge-muted .react-flow__edge-path {
+  @apply stroke-line-strong;
+}
+.react-flow__edge.ff-edge-back .react-flow__edge-path {
+  @apply stroke-line-strong;
+  stroke-dasharray: 3 5;
+}
+.react-flow__node {
+  cursor: default;
+}
+.react-flow__handle {
+  opacity: 0;
+  pointer-events: none;
 }
 
-/* Slim scrollbars for the audit feed + side rail */
-.slim-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-.slim-scroll::-webkit-scrollbar-thumb {
-  @apply rounded-full bg-ink-700;
-}
-.slim-scroll::-webkit-scrollbar-track {
-  background: transparent;
+/* Toasts (sonner) */
+[data-sonner-toast] {
+  @apply !rounded-xl !border-line !shadow-pop;
+  font-family: inherit;
 }

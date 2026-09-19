@@ -19,17 +19,21 @@ import type {
   AuditResponse,
   CreateWorkflowResult,
   DocumentUploadResult,
+  SubmissionReceipt,
   ValidationResult,
   WorkflowDetail,
   WorkflowState,
 } from "../types";
+import { ApiError } from "./errors";
 
 export const GOAL_EXAMPLES = [
   "Apply for the Merit Excellence Scholarship",
-  "Submit an expense report for approval",
+  "Renew my student visa before it expires",
+  "File a travel reimbursement claim",
 ];
 
 const REQUIRED_DOCS = ["academic_transcript", "government_id", "proof_of_income", "personal_essay"];
+const ALLOWED_MIME = new Set(["application/pdf", "image/png", "image/jpeg"]);
 const SEMESTER_GPA_REQUIREMENT = 3.5;
 
 interface Session {
@@ -40,6 +44,7 @@ interface Session {
   states: Record<string, WorkflowState>;
   collected: string[];
   validation: ValidationResult | null;
+  submission: SubmissionReceipt | null;
   docs: Record<string, DocumentUploadResult>;
   audit: AuditEvent[];
 }
@@ -188,6 +193,7 @@ function complete(id: string) {
 function transition(from: string, to: string, events: AuditEvent[]) {
   if (!session) return;
   complete(from);
+  events.push(audit("state_transition", { from_state: from, to_state: to }));
   activate(to, events);
 }
 
@@ -196,6 +202,7 @@ function audit(
   extra: Partial<AuditEvent> = {},
 ): AuditEvent {
   return {
+    event_id: `evt_${Math.floor(Math.random() * 0xffffffff).toString(16)}`,
     timestamp: now(),
     workflow_id: session?.workflowId ?? "",
     event_type,
@@ -204,13 +211,20 @@ function audit(
   };
 }
 
+function notFound(workflowId: string): ApiError {
+  return new ApiError("http", `workflow '${workflowId}' not found`, { status: 404, retryable: false });
+}
+
+function requireSession(workflowId: string): Session {
+  if (!session || session.workflowId !== workflowId) throw notFound(workflowId);
+  return session;
+}
+
 function advances(): AdvanceResponse {
   if (!session) throw new Error("no active session");
   const s = session;
   const states = Object.values(s.states);
-  const completedCount = states.filter(
-    (x) => x.status === "completed" || (x.type === "terminal" && s.current === x.id),
-  ).length;
+  const completedCount = states.filter((x) => x.status === "completed").length;
   const total = states.length;
   const active = states.find((x) => x.status === "active");
   const needs =
@@ -229,6 +243,7 @@ function advances(): AdvanceResponse {
     status: s.status,
     goal: s.goal,
     current_state: s.current,
+    last_message: lastMessage(s, active),
     needs,
     progress: {
       completed: completedCount,
@@ -238,38 +253,67 @@ function advances(): AdvanceResponse {
     states: Object.values(s.states),
     collected_documents: [...s.collected].sort(),
     validation: s.validation,
+    submission: s.submission,
     completed: s.status !== "in_progress",
     events: [],
   };
 }
 
+// Mirrors `WorkflowService._message` in the backend.
+function lastMessage(s: Session, active: WorkflowState | undefined): string {
+  if (s.status === "completed") return "Workflow completed. Application submitted successfully.";
+  if (s.status === "cancelled") return "Submission declined. Workflow ended.";
+  if (!active) return "Ready to begin.";
+  if (active.type === "document_required") {
+    const missing = active.required_documents.filter((d) => !s.collected.includes(d));
+    return missing.length
+      ? `Upload required documents: ${missing.join(", ")}.`
+      : "All required documents received.";
+  }
+  if (active.type === "human_approval") return "This action requires your explicit approval.";
+  return active.description;
+}
+
 function workflowResult(events: AuditEvent[]) {
   const r = advances();
   r.events = events;
+  session?.audit.push(...events);
   return r;
 }
 
 export const mockApi = {
   async createWorkflow(goal: string): Promise<CreateWorkflowResult> {
-    await delay();
+    await delay(900);
+    const trimmed = goal.trim();
+    if (trimmed.length < 3) {
+      throw new ApiError("http", "goal: String should have at least 3 characters", {
+        status: 422,
+        retryable: false,
+      });
+    }
     const id = `wf_${Math.floor(Math.random() * 0xffffffff).toString(16)}`;
     session = {
       workflowId: id,
-      goal,
+      goal: trimmed,
       status: "in_progress",
       current: null,
       states: seedStates(),
       collected: [],
       validation: null,
+      submission: null,
       docs: {},
-      audit: [audit("workflow_created", { details: { goal } })],
+      audit: [],
     };
+    session.audit.push(
+      audit("workflow_created", { details: { goal: trimmed } }),
+      audit("workflow_generated", { details: { states: Object.keys(session.states).length } }),
+    );
     return {
       workflow_id: id,
       status: session.status,
       workflow: {
         workflow_id: id,
-        goal,
+        goal: trimmed,
         initial_state: "eligibility_check",
         terminal_states: ["completed", "not_eligible", "blocked", "cancelled"],
         states: Object.values(session.states),
@@ -277,15 +321,22 @@ export const mockApi = {
     };
   },
 
-  async getWorkflow(): Promise<WorkflowDetail> {
+  async getWorkflow(workflowId: string): Promise<WorkflowDetail> {
     await delay(120);
+    requireSession(workflowId);
     return advances();
   },
 
-  async advance(req: AdvanceRequest): Promise<AdvanceResponse> {
+  async advance(workflowId: string, req: AdvanceRequest): Promise<AdvanceResponse> {
     await delay(420);
-    if (!session) throw new Error("no active session");
-    if (session.status !== "in_progress") return advances();
+    requireSession(workflowId);
+    if (!session) throw notFound(workflowId);
+    if (session.status !== "in_progress") {
+      throw new ApiError("http", `workflow '${workflowId}' is already finished`, {
+        status: 409,
+        retryable: false,
+      });
+    }
 
     const events: AuditEvent[] = [];
     let current = Object.values(session.states).find((s) => s.status === "active");
@@ -298,7 +349,10 @@ export const mockApi = {
 
 type RunOutcome = { pause: "document_upload" | "approval" | "terminal" | null };
 
-    const run = (stateId: string): RunOutcome => {
+    // `consumeInput` is true only for the state that was active when this advance
+    // began — mirrors the backend executor, which pauses at every newly-entered gate
+    // instead of re-reading the same approval/acknowledge payload.
+    const run = (stateId: string, consumeInput: boolean): RunOutcome => {
       const s = session!.states[stateId];
       if (s.type === "document_required") {
         const missing = s.required_documents.filter((d) => !session!.collected.includes(d));
@@ -308,8 +362,8 @@ type RunOutcome = { pause: "document_upload" | "approval" | "terminal" | null };
         return runValidation();
       }
       if (s.type === "human_approval") {
-        const granted = req.approval === true || req.acknowledge === true;
-        const rejected = req.approval === false || req.acknowledge === false;
+        const granted = consumeInput && (req.approval === true || req.acknowledge === true);
+        const rejected = consumeInput && (req.approval === false || req.acknowledge === false);
         if (!granted && !rejected) {
           s.status = "active";
           return { pause: "approval" };
@@ -324,10 +378,10 @@ type RunOutcome = { pause: "document_upload" | "approval" | "terminal" | null };
           complete(stateId);
           if (stateId === "review_warnings") {
             transition(stateId, "final_approval", events);
-            return run("final_approval");
+            return run("final_approval", false);
           }
           transition(stateId, "submission", events);
-          return run("submission");
+          return run("submission", false);
         }
         complete(stateId);
         if (stateId === "review_warnings") {
@@ -338,6 +392,13 @@ type RunOutcome = { pause: "document_upload" | "approval" | "terminal" | null };
         transition(stateId, "cancelled", events);
         session!.status = "cancelled";
         session!.current = "cancelled";
+        events.push(
+          audit("workflow_completed", {
+            from_state: "cancelled",
+            to_state: "cancelled",
+            details: { final_status: "cancelled" },
+          }),
+        );
         return { pause: "terminal" };
       }
       if (s.type === "automatic") {
@@ -350,17 +411,30 @@ type RunOutcome = { pause: "document_upload" | "approval" | "terminal" | null };
       }
       if (s.type === "execution") {
         complete(stateId);
+        const confirmation = `FF-${2026001 + Math.floor(Math.random() * 900)}`;
+        const submittedAt = now();
+        session!.submission = {
+          confirmation_id: confirmation,
+          documents: [...session!.collected].sort(),
+          submitted_at: submittedAt,
+          simulated: true,
+        };
         events.push(
           audit("execution", {
             from_state: stateId,
-            details: { confirmation_id: `FF-2026-${String(Math.floor(1000 + Math.random() * 9000))}` },
+            confidence: 1,
+            details: { confidence: 1, confirmation_id: confirmation, submitted_at: submittedAt, simulated: true },
           }),
         );
         transition(stateId, "completed", events);
         session!.status = "completed";
         session!.current = "completed";
         events.push(
-          audit("workflow_completed", { to_state: "completed", details: { goal: session!.goal } }),
+          audit("workflow_completed", {
+            from_state: "completed",
+            to_state: "completed",
+            details: { final_status: "completed", confirmation_id: confirmation },
+          }),
         );
         return { pause: "terminal" };
       }
@@ -412,10 +486,10 @@ type RunOutcome = { pause: "document_upload" | "approval" | "terminal" | null };
         return { pause: "approval" };
       }
       transition(state.id, "final_approval", events);
-      return run("final_approval");
+      return run("final_approval", false);
     };
 
-    const outcome = run(current.id);
+    const outcome = run(current.id, true);
 
     if (outcome.pause === "document_upload") {
       const docs = session.states.document_collection;
@@ -439,7 +513,27 @@ type RunOutcome = { pause: "document_upload" | "approval" | "terminal" | null };
 
   async uploadDocument(_workflowId: string, file: File): Promise<DocumentUploadResult> {
     await delay(900);
-    if (!session) throw new Error("no active session");
+    requireSession(_workflowId);
+    if (!session) throw notFound(_workflowId);
+    if (!ALLOWED_MIME.has(file.type)) {
+      throw new ApiError("http", "unsupported file type", { status: 415, retryable: false });
+    }
+    if (file.size === 0) {
+      throw new ApiError("http", "uploaded file is empty", { status: 422, retryable: false });
+    }
+    if (session.status !== "in_progress") {
+      throw new ApiError("http", `workflow '${_workflowId}' is not accepting documents (${session.status})`, {
+        status: 409,
+        retryable: false,
+      });
+    }
+    const activeState = Object.values(session.states).find((s) => s.status === "active");
+    if (!activeState || activeState.type !== "document_required") {
+      throw new ApiError("http", "workflow is not waiting for documents; advance it to a document step first", {
+        status: 409,
+        retryable: false,
+      });
+    }
     const name = file.name.toLowerCase();
     const result = classify(file.name);
 
@@ -464,9 +558,10 @@ type RunOutcome = { pause: "document_upload" | "approval" | "terminal" | null };
     return result;
   },
 
-  async listAudit(): Promise<AuditResponse> {
+  async listAudit(workflowId: string): Promise<AuditResponse> {
     await delay(120);
-    if (!session) return { workflow_id: "", events: [] };
+    requireSession(workflowId);
+    if (!session) throw notFound(workflowId);
     return { workflow_id: session.workflowId, events: session.audit };
   },
 };
@@ -559,8 +654,16 @@ function classify(filename: string): DocumentUploadResult {
   };
 }
 
+// Simulated latency so the UI's loading states are visible in the demo. Tests set it to 0.
+let latencyScale = 1;
+
+export function setMockLatency(scale: number) {
+  latencyScale = scale;
+}
+
 function delay(ms = 450) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  const wait = Math.round(ms * latencyScale);
+  return wait > 0 ? new Promise((resolve) => setTimeout(resolve, wait)) : Promise.resolve();
 }
 
 export function resetMock() {

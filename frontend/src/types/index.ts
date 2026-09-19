@@ -86,6 +86,14 @@ export interface ValidationResult {
   checked_documents: string[];
 }
 
+export interface SubmissionReceipt {
+  confirmation_id: string;
+  documents?: string[];
+  submitted_at?: string;
+  simulated?: boolean;
+  [key: string]: unknown;
+}
+
 export interface WorkflowDetail {
   workflow_id: string;
   status: WorkflowStatus;
@@ -97,6 +105,8 @@ export interface WorkflowDetail {
   states: WorkflowState[];
   collected_documents: string[];
   validation?: ValidationResult | null;
+  /** Execution receipt, present once the execution state has run. */
+  submission?: SubmissionReceipt | null;
 }
 
 export interface AdvanceRequest {
@@ -114,6 +124,7 @@ export interface AdvanceResponse extends WorkflowDetail {
 }
 
 export interface AuditEvent {
+  event_id?: string;
   timestamp: string;
   workflow_id: string;
   event_type: AuditEventType;
@@ -160,10 +171,20 @@ export const DOC_LABELS: Record<string, string> = {
   government_id: "Government ID",
   proof_of_income: "Proof of income",
   personal_essay: "Personal essay",
+  enrollment_verification: "Enrollment verification",
 };
 
 export const NEEDS_LABELS: Record<string, string> = {
   document_upload: "Documents needed",
   user_input: "Input needed",
   approval: "Approval needed",
+  action: "Action needed",
+};
+
+export const STATUS_LABELS: Record<WorkflowStatus, string> = {
+  in_progress: "In progress",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  failed: "Failed",
+  generation_failed: "Planning failed",
 };
