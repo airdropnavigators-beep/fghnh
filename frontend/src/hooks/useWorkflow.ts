@@ -196,7 +196,7 @@ export function useWorkflow() {
         workflowId,
         detail: res,
         phase: phaseFor(res),
-        confirmationId: prev.confirmationId ?? confirmationFrom(audit, workflowId),
+        confirmationId: res.submission?.confirmation_id ?? prev.confirmationId ?? confirmationFrom(audit, workflowId),
         audit,
         busy: false,
         pending: null,

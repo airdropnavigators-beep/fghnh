@@ -5,6 +5,14 @@ from __future__ import annotations
 import json
 import os
 from functools import lru_cache
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# `backend/.env` (see README "Backend (local)"). Real environment variables win, so a
+# deployed Lambda/CI environment is never overridden by a stray file.
+_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(_ENV_FILE, override=False)
 
 
 class Settings:

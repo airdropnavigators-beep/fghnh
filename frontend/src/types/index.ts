@@ -86,6 +86,14 @@ export interface ValidationResult {
   checked_documents: string[];
 }
 
+export interface SubmissionReceipt {
+  confirmation_id: string;
+  documents?: string[];
+  submitted_at?: string;
+  simulated?: boolean;
+  [key: string]: unknown;
+}
+
 export interface WorkflowDetail {
   workflow_id: string;
   status: WorkflowStatus;
@@ -97,6 +105,8 @@ export interface WorkflowDetail {
   states: WorkflowState[];
   collected_documents: string[];
   validation?: ValidationResult | null;
+  /** Execution receipt, present once the execution state has run. */
+  submission?: SubmissionReceipt | null;
 }
 
 export interface AdvanceRequest {

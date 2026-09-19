@@ -330,6 +330,12 @@ def _record_state_done(
         StateType.EXECUTION: AuditEventType.EXECUTION,
     }.get(state.type)
     if kind is not None:
+        # Surface the execution receipt so the audit trail is self-contained.
+        package = step.data.get("package") if isinstance(step.data, dict) else None
+        if isinstance(package, dict):
+            for key in ("confirmation_id", "submitted_at", "simulated"):
+                if key in package:
+                    details[key] = package[key]
         _emit(workflow, result, kind, from_state=state.id, details=details)
 
 

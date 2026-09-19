@@ -16,7 +16,7 @@ from ..models.api import (
     DocumentUploadResponse,
     WorkflowDetailResponse,
 )
-from ..models.enums import AuditEventType
+from ..models.enums import AuditEventType, StateStatus, StateType, WorkflowStatus
 from ..workflow.errors import (
     ExecutionError,
     InvalidTransitionError,
@@ -109,14 +109,18 @@ async def upload_document(
 ) -> DocumentUploadResponse:
     settings = services.settings
     limit = settings.max_document_size_mb * 1024 * 1024
-    content = await _read_within_limit(file, limit)
     mime = file.content_type or "application/octet-stream"
-    if mime not in settings.allowed_mime_types and not settings.demo_mode:
+    # The allow-list applies in every mode: demo mode must not become a bypass.
+    if mime not in settings.allowed_mime_types:
         raise HTTPException(status_code=415, detail="unsupported file type")
+    content = await _read_within_limit(file, limit)
+    if not content:
+        raise HTTPException(status_code=422, detail="uploaded file is empty")
 
     workflow = services.workflow_service.get_workflow(workflow_id)
     if workflow is None:
         raise _http(WorkflowNotFound(f"workflow '{workflow_id}' not found"))
+    _require_accepting_documents(workflow)
 
     services.repo.append_audit(
         services.workflow_service.audit_event(
@@ -171,6 +175,25 @@ async def _read_within_limit(file: UploadFile, limit: int) -> bytes:
         if len(buffer) > limit:
             raise HTTPException(status_code=413, detail="file exceeds size limit")
     return bytes(buffer)
+
+
+def _require_accepting_documents(workflow: Any) -> None:
+    """Only an in-progress workflow paused on a document gate may receive uploads.
+
+    Anything else (finished, not yet started, or waiting on approval) is a 409 so a
+    stale client cannot append documents and audit rows to a closed run.
+    """
+    if workflow.status != WorkflowStatus.IN_PROGRESS:
+        raise HTTPException(
+            status_code=409,
+            detail=f"workflow '{workflow.workflow_id}' is not accepting documents ({workflow.status.value})",
+        )
+    active = next((s for s in workflow.states if s.status == StateStatus.ACTIVE), None)
+    if active is None or active.type != StateType.DOCUMENT_REQUIRED:
+        raise HTTPException(
+            status_code=409,
+            detail="workflow is not waiting for documents; advance it to a document step first",
+        )
 
 
 def _fields_payload(record) -> dict[str, Any]:

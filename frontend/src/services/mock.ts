@@ -19,6 +19,7 @@ import type {
   AuditResponse,
   CreateWorkflowResult,
   DocumentUploadResult,
+  SubmissionReceipt,
   ValidationResult,
   WorkflowDetail,
   WorkflowState,
@@ -32,6 +33,7 @@ export const GOAL_EXAMPLES = [
 ];
 
 const REQUIRED_DOCS = ["academic_transcript", "government_id", "proof_of_income", "personal_essay"];
+const ALLOWED_MIME = new Set(["application/pdf", "image/png", "image/jpeg"]);
 const SEMESTER_GPA_REQUIREMENT = 3.5;
 
 interface Session {
@@ -42,6 +44,7 @@ interface Session {
   states: Record<string, WorkflowState>;
   collected: string[];
   validation: ValidationResult | null;
+  submission: SubmissionReceipt | null;
   docs: Record<string, DocumentUploadResult>;
   audit: AuditEvent[];
 }
@@ -250,6 +253,7 @@ function advances(): AdvanceResponse {
     states: Object.values(s.states),
     collected_documents: [...s.collected].sort(),
     validation: s.validation,
+    submission: s.submission,
     completed: s.status !== "in_progress",
     events: [],
   };
@@ -296,6 +300,7 @@ export const mockApi = {
       states: seedStates(),
       collected: [],
       validation: null,
+      submission: null,
       docs: {},
       audit: [],
     };
@@ -407,11 +412,18 @@ type RunOutcome = { pause: "document_upload" | "approval" | "terminal" | null };
       if (s.type === "execution") {
         complete(stateId);
         const confirmation = `FF-${2026001 + Math.floor(Math.random() * 900)}`;
+        const submittedAt = now();
+        session!.submission = {
+          confirmation_id: confirmation,
+          documents: [...session!.collected].sort(),
+          submitted_at: submittedAt,
+          simulated: true,
+        };
         events.push(
           audit("execution", {
             from_state: stateId,
             confidence: 1,
-            details: { confidence: 1, confirmation_id: confirmation },
+            details: { confidence: 1, confirmation_id: confirmation, submitted_at: submittedAt, simulated: true },
           }),
         );
         transition(stateId, "completed", events);
@@ -503,6 +515,25 @@ type RunOutcome = { pause: "document_upload" | "approval" | "terminal" | null };
     await delay(900);
     requireSession(_workflowId);
     if (!session) throw notFound(_workflowId);
+    if (!ALLOWED_MIME.has(file.type)) {
+      throw new ApiError("http", "unsupported file type", { status: 415, retryable: false });
+    }
+    if (file.size === 0) {
+      throw new ApiError("http", "uploaded file is empty", { status: 422, retryable: false });
+    }
+    if (session.status !== "in_progress") {
+      throw new ApiError("http", `workflow '${_workflowId}' is not accepting documents (${session.status})`, {
+        status: 409,
+        retryable: false,
+      });
+    }
+    const activeState = Object.values(session.states).find((s) => s.status === "active");
+    if (!activeState || activeState.type !== "document_required") {
+      throw new ApiError("http", "workflow is not waiting for documents; advance it to a document step first", {
+        status: 409,
+        retryable: false,
+      });
+    }
     const name = file.name.toLowerCase();
     const result = classify(file.name);
 

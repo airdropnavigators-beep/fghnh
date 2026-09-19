@@ -74,6 +74,10 @@ export function normalizeDetail(raw: unknown): WorkflowDetail {
             : [],
         }
       : null,
+    submission:
+      isObj(raw.submission) && typeof raw.submission.confirmation_id === "string"
+        ? { ...raw.submission, confirmation_id: raw.submission.confirmation_id }
+        : null,
   };
 }
 

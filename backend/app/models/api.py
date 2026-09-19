@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .enums import WorkflowStatus
 
@@ -17,6 +17,14 @@ class CreateWorkflowRequest(BaseModel):
         max_length=500,
         description="Natural-language goal the workflow should accomplish.",
     )
+
+    @field_validator("goal")
+    @classmethod
+    def _strip_and_require_content(cls, value: str) -> str:
+        stripped = " ".join(value.split())
+        if len(stripped) < 3:
+            raise ValueError("goal must contain at least 3 non-whitespace characters")
+        return stripped
 
 
 class CreateWorkflowResponse(BaseModel):
@@ -83,6 +91,11 @@ class WorkflowDetailResponse(BaseModel):
     )
     validation: Optional[dict[str, Any]] = Field(
         default=None, description="Latest cross-document validation result, if any."
+    )
+    submission: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Execution receipt once the workflow has run its execution state "
+        "(confirmation_id, documents, submitted_at, simulated).",
     )
 
 
