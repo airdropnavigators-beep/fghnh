@@ -60,42 +60,55 @@ class Services:
                  self.settings.mock_llm,
             )
             return MockLLMProvider()
-
-        try:
-            return BedrockProvider(self.settings)
-
-        except Exception as exc:  # noqa: BLE001 - fall back so the app still boots
-            logger.warning(
-                "BedrockProvider unavailable (%s); falling back to MockLLMProvider",
-                exc,
-            )
-            return MockLLMProvider()
+        return self._build_or_fail("BedrockProvider", lambda: BedrockProvider(self.settings))
 
     def _build_repo(self) -> WorkflowRepository:
         if self.settings.demo_mode:
             return InMemoryRepository()
-        try:
-            return DynamoRepository(
+        return self._build_or_fail(
+            "DynamoRepository",
+            lambda: DynamoRepository(
                 table_workflows=self.settings.aws_ddb_workflows,
                 table_documents=self.settings.aws_ddb_documents,
                 table_audit=self.settings.aws_ddb_audit,
                 region=self.settings.aws_region,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("DynamoRepository unavailable (%s); falling back to InMemoryRepository", exc)
-            return InMemoryRepository()
+                retention_days=self.settings.record_retention_days,
+            ),
+        )
 
     def _build_documents(self):
         if self.settings.demo_mode:
             return MockObjectStore(), MockDocumentProcessor()
-        try:
-            return (
+        return self._build_or_fail(
+            "AWS document services",
+            lambda: (
                 S3ObjectStore(self.settings.aws_s3_bucket, self.settings.aws_region),
-                TextractProcessor(self.settings.aws_region),
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("AWS document services unavailable (%s); falling back to mocks", exc)
-            return MockObjectStore(), MockDocumentProcessor()
+                TextractProcessor(
+                    self.settings.aws_region,
+                    bucket=self.settings.aws_s3_bucket,
+                    max_sync_bytes=self.settings.textract_sync_max_bytes,
+                    async_poll_seconds=self.settings.textract_async_poll_seconds,
+                    async_timeout_seconds=self.settings.textract_async_timeout_seconds,
+                ),
+            ),
+        )
+
+    @staticmethod
+    def _build_or_fail(name: str, factory):
+        """In production a missing dependency is a startup error, not a silent downgrade.
+
+        Falling back to in-memory storage would look healthy while losing every
+        workflow between Lambda invocations; refusing to boot surfaces the real
+        misconfiguration in the deploy logs instead.
+        """
+        try:
+            return factory()
+        except Exception as exc:  # noqa: BLE001 - re-raised with context
+            logger.error("%s could not be initialised: %s", name, exc)
+            raise RuntimeError(
+                f"{name} could not be initialised in DEMO_MODE=false: {exc}. "
+                "Set DEMO_MODE=true for a local run or fix the AWS configuration."
+            ) from exc
 
 
 @lru_cache

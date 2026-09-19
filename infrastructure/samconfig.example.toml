@@ -15,4 +15,6 @@ region = "ap-south-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 disable_rollback = false
-parameter_overrides = "Environment=\"staging\" BedrockRegion=\"us-east-1\" DocumentRetentionDays=\"1\""
+# CorsOriginList must list the same origins as CorsOrigins (JSON) — one is read by API
+# Gateway, the other by the FastAPI middleware.
+parameter_overrides = "Environment=\"staging\" BedrockRegion=\"us-east-1\" DocumentRetentionDays=\"1\" CorsOrigins='[\"http://localhost:5173\"]' CorsOriginList=\"http://localhost:5173\""

@@ -30,17 +30,27 @@ Parameters:
   CorsOrigins:
     Type: String
     Default: '["http://localhost:5173"]'
+    Description: JSON array of allowed browser origins (consumed by the FastAPI CORS middleware).
+
+  CorsOriginList:
+    Type: CommaDelimitedList
+    Default: "http://localhost:5173"
+    Description: Same origins as a comma-separated list (consumed by the HTTP API edge CORS config).
 
   DocumentRetentionDays:
     Type: Number
     Default: 1
     MinValue: 1
 
+Conditions:
+  IsProduction: !Equals [!Ref Environment, production]
+
 Globals:
   Function:
     Runtime: python3.12
     MemorySize: 1024
-    Timeout: 30
+    # Planning + asynchronous Textract polling can exceed the previous 30 s budget.
+    Timeout: 90
     Tracing: Active
 
 Resources:
@@ -53,6 +63,13 @@ Resources:
     Type: AWS::Serverless::HttpApi
     Properties:
       StageName: !Ref Environment
+      # Edge CORS: preflight is answered by API Gateway (no Lambda invoke) and 5xx responses
+      # still carry CORS headers so the browser shows the real status instead of "CORS error".
+      CorsConfiguration:
+        AllowOrigins: !Ref CorsOriginList
+        AllowMethods: [GET, POST, OPTIONS]
+        AllowHeaders: [Content-Type, Accept, Authorization]
+        MaxAge: 600
 
   # ==========================================================
   # S3 DOCUMENT STORAGE
@@ -102,8 +119,13 @@ Resources:
         - AttributeName: workflowId
           KeyType: HASH
 
+      # Rows expire together with the S3 objects they reference (see DocumentRetentionDays).
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
       PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: false
+        PointInTimeRecoveryEnabled: !If [IsProduction, true, false]
 
       Tags:
         - Key: Project
@@ -126,8 +148,12 @@ Resources:
         - AttributeName: documentId
           KeyType: RANGE
 
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
       PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: false
+        PointInTimeRecoveryEnabled: !If [IsProduction, true, false]
 
       Tags:
         - Key: Project
@@ -144,14 +170,20 @@ Resources:
         - AttributeName: timestamp
           AttributeType: S
 
+      # Sort key is "<timestamp>#<event_id>" (see app/storage/dynamo.py) so events emitted in
+      # the same microsecond never overwrite each other.
       KeySchema:
         - AttributeName: workflowId
           KeyType: HASH
         - AttributeName: timestamp
           KeyType: RANGE
 
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
       PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: false
+        PointInTimeRecoveryEnabled: !If [IsProduction, true, false]
 
       Tags:
         - Key: Project
@@ -189,6 +221,10 @@ Resources:
 
           MAX_DOCUMENT_SIZE_MB: "10"
           ALLOWED_MIME_TYPES: '["application/pdf","image/png","image/jpeg"]'
+          TEXTRACT_SYNC_MAX_BYTES: "5242880"
+          TEXTRACT_ASYNC_POLL_SECONDS: "1.5"
+          TEXTRACT_ASYNC_TIMEOUT_SECONDS: "60"
+          RECORD_RETENTION_DAYS: !Ref DocumentRetentionDays
 
           CONFIDENCE_PASS: "0.85"
           CONFIDENCE_WARN: "0.60"
@@ -205,6 +241,7 @@ Resources:
               Effect: Allow
               Action:
                 - s3:PutObject
+                - s3:GetObject
                 - s3:DeleteObject
               Resource: !Sub "${DocumentBucket.Arn}/uploads/*"
 
@@ -246,6 +283,8 @@ Resources:
               Effect: Allow
               Action:
                 - textract:DetectDocumentText
+                - textract:StartDocumentTextDetection
+                - textract:GetDocumentTextDetection
               Resource: "*"
 
 
@@ -262,6 +301,10 @@ Resources:
                 - !Sub "arn:${AWS::Partition}:bedrock:${BedrockRegion}:${AWS::AccountId}:inference-profile/${BedrockModelId}"
                 - !Sub "arn:${AWS::Partition}:bedrock:${BedrockRegion}:${AWS::AccountId}:inference-profile/${BedrockFastModelId}"
                 - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0"
+
+      LoggingConfig:
+        LogGroup: !Ref FlowForgeApiLogGroup
+        LogFormat: JSON
 
       Events:
 
@@ -287,10 +330,12 @@ Resources:
   # CLOUDWATCH
   # ==========================================================
 
+  # Explicit group so retention applies from the first invocation. Lambda's LoggingConfig
+  # points at it, which also removes the race with the auto-created default group.
   FlowForgeApiLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${FlowForgeApiFunction}"
+      LogGroupName: !Sub "/flowforge/${Environment}/api"
       RetentionInDays: 7
 
 
@@ -318,7 +363,9 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref FlowForgeApiLogGroup
-      FilterPattern: '"error"'
+      # Only structured error events (observability.log_event("error", ...)), not any line
+      # that happens to contain the word "error".
+      FilterPattern: '{ $.event = "error" }'
       MetricTransformations:
         - MetricNamespace: FlowForge
           MetricName: ApplicationErrors

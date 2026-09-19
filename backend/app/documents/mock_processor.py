@@ -114,7 +114,9 @@ class MockObjectStore(DocumentObjectStore):
 
 
 class MockDocumentProcessor(DocumentProcessor):
-    def extract_text(self, content: bytes, filename: str, mime_type: str) -> str:
+    def extract_text(
+        self, content: bytes, filename: str, mime_type: str, storage_uri: str | None = None
+    ) -> str:
         lowered = filename.lower()
         content_sig = hashlib.sha256(content or b"").hexdigest()[:8]
         if "transcript" in lowered:

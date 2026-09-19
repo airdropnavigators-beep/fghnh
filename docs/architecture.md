@@ -173,7 +173,10 @@ cached `get_settings()`.
 | `LOG_LEVEL` | `INFO` | Root logger level |
 | `CORS_ORIGINS` | `["http://localhost:5173"]` | Allowed browser origins |
 | `MAX_DOCUMENT_SIZE_MB` | `10` | Upload size limit |
-| `ALLOWED_MIME_TYPES` | pdf/png/jpeg | Upload MIME allow-list |
+| `ALLOWED_MIME_TYPES` | pdf/png/jpeg | Upload MIME allow-list (enforced in every mode) |
+| `TEXTRACT_SYNC_MAX_BYTES` | 5 MB | PNG/JPEG up to this size use `DetectDocumentText(Bytes)`; PDFs and larger files use the asynchronous S3 job |
+| `TEXTRACT_ASYNC_POLL_SECONDS` / `TEXTRACT_ASYNC_TIMEOUT_SECONDS` | 1.5 / 60 | Polling cadence and deadline for asynchronous Textract jobs |
+| `RECORD_RETENTION_DAYS` | 0 | DynamoDB TTL for workflow/document/audit rows (0 = keep) |
 | `CONFIDENCE_PASS` / `CONFIDENCE_WARN` | `0.85` / `0.60` | Confidence gates |
 | `BEDROCK_MODEL_ID` | Claude 3.5 Sonnet | Workflow generation + cross-validation |
 | `BEDROCK_FAST_MODEL_ID` | Claude 3.5 Haiku | Classification + field extraction |

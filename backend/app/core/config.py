@@ -57,11 +57,20 @@ class Settings:
         self.aws_ddb_audit: str = env.get("AWS_DYNAMODB_TABLE_AUDIT", "flowforge-audit")
 
         self.max_document_size_mb: int = int(env.get("MAX_DOCUMENT_SIZE_MB", "10"))
+        # DynamoDB TTL for workflow/document/audit rows; 0 disables. Keep aligned with the
+        # S3 lifecycle rule (DocumentRetentionDays) so records never outlive their objects.
+        self.record_retention_days: int = int(env.get("RECORD_RETENTION_DAYS", "0"))
         raw_mime = env.get("ALLOWED_MIME_TYPES", '["application/pdf","image/png","image/jpeg"]')
         try:
             self.allowed_mime_types: list[str] = json.loads(raw_mime)
         except json.JSONDecodeError:
             self.allowed_mime_types = ["application/pdf", "image/png", "image/jpeg"]
+
+        # Textract: the synchronous Bytes API accepts PNG/JPEG up to 5 MB only. PDFs and
+        # larger images go through the asynchronous S3-backed job (see aws_processor).
+        self.textract_sync_max_bytes: int = int(env.get("TEXTRACT_SYNC_MAX_BYTES", str(5 * 1024 * 1024)))
+        self.textract_async_poll_seconds: float = float(env.get("TEXTRACT_ASYNC_POLL_SECONDS", "1.5"))
+        self.textract_async_timeout_seconds: float = float(env.get("TEXTRACT_ASYNC_TIMEOUT_SECONDS", "60"))
 
         self.confidence_pass: float = float(env.get("CONFIDENCE_PASS", "0.85"))
         self.confidence_warn: float = float(env.get("CONFIDENCE_WARN", "0.60"))

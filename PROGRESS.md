@@ -182,10 +182,14 @@ Legend: ✅ done · ⏳ done pending verification · 🚧 in progress · ⬜ not
   via `backend/scripts/generate_api_reference.py`
 
 ## Chunk 14 — Infrastructure (SAM/Lambda/IAM) + CI/CD
-**Owner:** C · **Status:** 🚧 in progress — CI ✅, SAM/Lambda/IAM ⬜
+**Owner:** C · **Status:** ✅ done — CI ✅, SAM/Lambda/IAM ✅ (`flowforge-staging` deployed in
+`ap-south-1`, see `docs/team/Progress_c.md`); hardened in Chunk 17
 
 - `.github/workflows/ci.yml` — backend (ruff + pytest), frontend (lint + build),
   evaluation (generate docs + `--strict`)
+- `.github/workflows/cd.yml` — OIDC-authenticated `sam deploy` to staging on push to `main`
+- `infrastructure/template.yaml` — HTTP API, Lambda (Mangum), S3 (SSE, lifecycle), DynamoDB
+  ×3, Textract/Bedrock IAM, CloudWatch log group + metric filters
 
 ## Chunk 15 — Live AWS + Bedrock verification & demo polish
 **Owner:** A/C · **Status:** ⬜ — only after demo is fully safe in DEMO_MODE
@@ -236,6 +240,40 @@ browser pass against mock **and** live `DEMO_MODE` backend)
 - Sandbox: `.hoplite/settings.json` + `setup.sh` + `run.sh` run FastAPI (`DEMO_MODE`) on :8000
   and Vite on :5173 for the managed preview; `vite.config.ts` gains `VITE_ALLOWED_HOSTS`
 
+## Chunk 17 — Full-project audit remediation (backend + infra)
+**Owner:** B (+A/C lanes by request) · **Status:** ✅ done (`pytest` 80 passed, `ruff` clean,
+`pip-audit` 0 vulnerabilities)
+
+- Audit report: `docs/team/full-project-audit-2026-09.md` (48 reproduced findings, IDs below)
+- **B-1** Dependency CVEs: `fastapi 0.141.1`, `starlette 1.6.0`, `python-multipart 0.0.32`,
+  `pytest 9.1.1`, `uvicorn 0.53`, `mangum 0.22` — `pip-audit` 28 → 0
+- **B-2** `backend/.env` is now loaded (`python-dotenv`, real env wins)
+- **B-3** DynamoDB audit sort key is `<timestamp>#<event_id>` + `attribute_not_exists`
+  condition — same-microsecond events no longer overwrite; legacy rows still read
+- **B-4** Textract routing: PNG/JPEG ≤ 5 MB → synchronous `Bytes`; PDF / larger → asynchronous
+  S3 job (`Start`/`GetDocumentTextDetection`, paged, polled with deadline). IAM + Lambda
+  timeout (90 s) updated accordingly
+- **B-5** Untrusted-document delimiters are neutralised (`&lt;/document_content&gt;`) so a
+  document cannot close the block and inject instructions
+- **B-6** Uploads accepted only while paused on a `document_required` state (409 otherwise)
+- **B-8** MIME allow-list enforced in demo mode too; empty bodies → 422
+- **B-9** Numbers stored as DynamoDB `N`, round-trip as numbers (was string)
+- **B-10** `list_documents` / `list_audit` follow `LastEvaluatedKey`
+- **B-12** Goal whitespace-normalised; must contain ≥ 3 real characters
+- **B-13** Execution event carries `confirmation_id`; receipt persisted and exposed as
+  `submission` on `GET /workflows/{id}` (frontend prefers it over a derived id)
+- **B-14** `DEMO_MODE=false` fails fast when Bedrock/DynamoDB/S3 cannot be built instead of
+  silently downgrading to in-memory storage
+- **B-16** BOMs stripped from 10 Python files
+- **I-2** IAM: `s3:GetObject` + async Textract actions · **I-3** edge CORS on the HTTP API
+  (`CorsOriginList`) · **I-4** explicit log group via `LoggingConfig` (no auto-create race) ·
+  **I-5** error metric filter matches structured `{ $.event = "error" }` only ·
+  **I-6** DynamoDB TTL (`expiresAt`, `RECORD_RETENTION_DAYS`) aligned with S3 retention; PITR
+  on for `production`
+- **D-1** Chunk 14 / checklist row 16 marked done to match the deployed stack
+- Tests: `tests/test_input_hardening.py` (12), `tests/test_aws_adapters.py` (15, fake
+  DynamoDB/Textract clients) → suite **80 passed**
+
 ---
 
 ## Current checklist (spec §45 task list)
@@ -257,12 +295,15 @@ browser pass against mock **and** live `DEMO_MODE` backend)
 | 13 | Verify complete mock path | ✅ E2E scripted + live demo verified; UI ↔ live backend E2E (Chunk 16) |
 | 14 | Evaluation + test documents | ✅ measured (mock path, all targets pass) |
 | 15 | CI/CD | ✅ `.github/workflows/ci.yml` |
-| 16 | Infrastructure (SAM/Lambda/IAM) | ⬜ Chunk 14 |
+| 16 | Infrastructure (SAM/Lambda/IAM) | ✅ Chunk 14 (staging deployed) · hardened Chunk 17 |
 
 ## Known gaps / risks
 - Live Bedrock/Textract calls unverified (no AWS creds in this workspace yet).
 - ~~Frontend built against the mock; interactive browser pass + wiring to live backend pending.~~
   ✅ Chunk 16 — interactive browser pass done; frontend wired to the live backend
   (verified end-to-end against `DEMO_MODE`; real-AWS providers still gated on Chunk 15 creds).
-- Infrastructure (SAM/Lambda/IAM/CloudWatch) not yet written — Chunk 14 remainder.
+- ~~Infrastructure (SAM/Lambda/IAM/CloudWatch) not yet written — Chunk 14 remainder.~~ ✅ Chunks 14/17.
+- Open audit items (see `docs/team/full-project-audit-2026-09.md`): B-7/I-1 staging still
+  runs `MOCK_LLM=true`; B-11 eligibility uses the demo profile; E-1 mock-path metrics measure
+  filename heuristics; frontend F-items addressed in Chunk 18.
 - Evaluation numbers describe the deterministic DEMO_MODE path, not a foundation model.

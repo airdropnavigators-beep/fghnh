@@ -20,6 +20,17 @@ class DocumentObjectStore(Protocol):
 
 
 class DocumentProcessor(Protocol):
-    def extract_text(self, content: bytes, filename: str, mime_type: str) -> str:
-        """Return plain text for downstream classification/extraction."""
+    def extract_text(
+        self,
+        content: bytes,
+        filename: str,
+        mime_type: str,
+        storage_uri: str | None = None,
+    ) -> str:
+        """Return plain text for downstream classification/extraction.
+
+        `storage_uri` is the URI returned by the object store for this upload; processors
+        that must read from durable storage (asynchronous Textract jobs) use it instead
+        of the in-memory bytes.
+        """
         ...
